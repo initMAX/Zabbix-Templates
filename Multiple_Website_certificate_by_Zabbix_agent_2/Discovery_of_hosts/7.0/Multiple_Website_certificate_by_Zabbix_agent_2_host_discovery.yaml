@@ -1,0 +1,518 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: initMAX
+  host_groups:
+    - uuid: 771053d820cf471599c38bffbf129345
+      name: Certificates/Hosts
+  templates:
+    - uuid: 8232529abcb644f1a5ef01c5bc3daf90
+      template: 'Multiple Website certificate by Zabbix agent 2 - cert hosts discovery'
+      name: 'Multiple Website certificate by Zabbix agent 2 - cert hosts discovery'
+      description: |
+        Based on original Zabbix template "Website certificate by Zabbix agent 2"
+        
+        Macro format:
+        <hostname1>:<443>:<IP1>,<hostname2>,<hostname3>:<port3>
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX
+        version: 7.0-0
+      groups:
+        - name: initMAX
+      items:
+        - uuid: 30dd8fdd3ad545c59b037dee02aaeed3
+          name: 'Cert count'
+          type: DEPENDENT
+          key: cert.count
+          delay: '0'
+          units: '!certs'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return value.split('','').length'
+          master_item:
+            key: cert.list
+        - uuid: 243f1e5524bf4383978ad65a6155c5f1
+          name: 'Cert list'
+          type: SCRIPT
+          key: cert.list
+          trends: '0'
+          value_type: TEXT
+          params: |
+            params = JSON.parse(value)
+            
+            return params.Macro;
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1m
+          parameters:
+            - name: Macro
+              value: '{$CERT.ARRAY}'
+        - uuid: 20d550c0daef463ebb388279f2ac1432
+          name: 'Cert Names discovery RAW'
+          type: DEPENDENT
+          key: cert.raw
+          delay: '0'
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Transfer list of certs into JSON
+                  // initMAX - Alois Zadrazil
+                  pole = value.split(",");
+                  out_string = '';
+                  for (x in pole) {
+                    polozka = pole[x].split(":");
+                    out_string += '{"HOSTNAME":"'+ polozka[0]+ '"';
+                    if (polozka[1]) { out_string += ',"PORT":"'+ polozka[1] + '"' ;} else { out_string += ',"PORT":""' ;}
+                    if (polozka[2]) { out_string += ',"IP":"'+ polozka[2] + '"' ; } else { out_string += ',"IP":""' ; }
+                    out_string+= '},';
+                   }
+                  out_string = out_string.substring(0, out_string.length - 1);
+                  
+                  return '[' + out_string + ']';
+          master_item:
+            key: cert.list
+      discovery_rules:
+        - uuid: a62af111cc5941f89f031629cccfc09b
+          name: 'Cert Hosts discovery'
+          type: DEPENDENT
+          key: cert.hosts.discovery
+          delay: '0'
+          lifetime: '0'
+          host_prototypes:
+            - uuid: b343104330734897a6e5071d9e941825
+              host: 'cert_{#HOSTNAME}'
+              name: 'Cert "{#HOSTNAME}"'
+              group_links:
+                - group:
+                    name: Certificates/Hosts
+              templates:
+                - name: 'Multiple Website certificate by Zabbix agent 2 - check on discovered host'
+              macros:
+                - macro: '{$CERT.WEBSITE.HOSTNAME}'
+                  value: '{#HOSTNAME}'
+                - macro: '{$CERT.WEBSITE.IP}'
+                  value: '{#IP}'
+                - macro: '{$CERT.WEBSITE.PORT}'
+                  value: '{#PORT}'
+              inventory_mode: AUTOMATIC
+          master_item:
+            key: cert.raw
+          lld_macro_paths:
+            - lld_macro: '{#HOSTNAME}'
+              path: $.HOSTNAME
+            - lld_macro: '{#IP}'
+              path: $.IP
+            - lld_macro: '{#PORT}'
+              path: $.PORT
+      macros:
+        - macro: '{$CERT.ARRAY}'
+          value: '<hostname1>:<443>:<IP1>,<hostname2>:<443>:<IP2>'
+          description: 'Array of hostnames, IP addresses and ports.'
+        - macro: '{$CERT.EXPIRY.AVER}'
+          value: '7'
+          description: 'Number of days until the certificate expires.'
+        - macro: '{$CERT.EXPIRY.WARN}'
+          value: '30'
+        - macro: '{$CERT.WEBSITE.HOSTNAME}'
+          value: '<Put DNS name>'
+          description: 'The website DNS name for the connection.'
+        - macro: '{$CERT.WEBSITE.IP}'
+          description: 'The website IP address for the connection.'
+        - macro: '{$CERT.WEBSITE.PORT}'
+          value: '443'
+          description: 'The TLS/SSL port number of the website.'
+    - uuid: 60a91a5b522746b193b0161b0460bb48
+      template: 'Multiple Website certificate by Zabbix agent 2 - check on discovered host'
+      name: 'Multiple Website certificate by Zabbix agent 2 - check on discovered host'
+      description: |
+        The template to monitor TLS/SSL certificate on the website by Zabbix agent 2 that works without any external scripts.
+        
+        Zabbix agent 2 with the WebCertificate plugin requests certificate using the web.certificate.get key and returns JSON with certificate attributes.
+        
+        You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback/428309-discussion-thread-for-official-zabbix-template-tls-ssl-certificates-monitoring
+        
+        Generated by official Zabbix template tool "Templator"
+      vendor:
+        name: initMAX
+        version: 7.0-0
+      groups:
+        - name: initMAX
+      items:
+        - uuid: edf87f3ee1ca402c9ece70b224d8ab7f
+          name: 'Cert: Subject alternative name'
+          type: DEPENDENT
+          key: cert.alternative_names
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'The subject alternative name extension allows identities to be bound to the subject of the certificate.  These identities may be included in addition to or in place of the identity in the subject field of the certificate.  Defined options include an Internet electronic mail address, a DNS name, an IP address, and a Uniform Resource Identifier (URI).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.alternative_names
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 9d31bcf5dceb43dea57f21e762c65190
+          name: 'Cert: Days to Expire'
+          type: CALCULATED
+          key: cert.expire.timer
+          delay: 15m
+          history: 7d
+          value_type: FLOAT
+          units: '!days'
+          params: 'round((last(//cert.not_after) - now()) / 86400, 0)'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 56fb12c10fc14ac0841681c566e379e0
+          name: 'Cert: Issuer'
+          type: DEPENDENT
+          key: cert.issuer
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'The field identifies the entity that has signed and issued the certificate.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.issuer
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: b3f1b7043b834bb5b38dde344342a5a0
+          name: 'Cert: Issuer name'
+          type: DEPENDENT
+          key: cert.issuer.name
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'O=([^,]+)'
+                - \1
+          master_item:
+            key: cert.issuer
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 2e70728e9dd0483db94a45b1b2f1230f
+          name: 'Lifespan %'
+          type: CALCULATED
+          key: cert.lifespan
+          delay: 15m
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          params: '((now()-last(//cert.not_before))/(last(//cert.not_after)-last(//cert.not_before)))*100'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 004f1c55b23946c08d066a1191a6e854
+          name: 'Cert: Last validation status'
+          type: DEPENDENT
+          key: cert.message
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'Last check result message.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.result.message
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: c6441a6c9f004e298b685c367a0ebebd
+          name: 'Cert name'
+          type: SCRIPT
+          key: cert.name
+          delay: 15m
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          params: |
+            params = JSON.parse(value)
+            parts = [];
+              
+            if (params.hostname) parts.push(params.hostname);
+            if (params.port) parts.push(params.port);
+            if (params.ip) parts.push(params.ip);
+            
+            return parts.join('_');
+          parameters:
+            - name: hostname
+              value: '{$CERT.WEBSITE.HOSTNAME}'
+            - name: ip
+              value: '{$CERT.WEBSITE.IP}'
+            - name: port
+              value: '{$CERT.WEBSITE.PORT}'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: ee6d4991e0584c4c8b7c1f86a9c8de62
+          name: 'Cert: Expires on'
+          type: DEPENDENT
+          key: cert.not_after
+          delay: '0'
+          history: 7d
+          units: unixtime
+          description: 'The date on which the certificate validity period ends.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.not_after.timestamp
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 6cfdd5deffc14fc280be3a66c50e3856
+          name: 'Cert: Valid from'
+          type: DEPENDENT
+          key: cert.not_before
+          delay: '0'
+          history: 7d
+          units: unixtime
+          description: 'The date on which the certificate validity period begins.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.not_before.timestamp
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 577fe74ed29f489086e92aa93cf91eaa
+          name: 'Cert: Public key algorithm'
+          type: DEPENDENT
+          key: cert.public_key_algorithm
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'The digital signature algorithm is used to verify the signature of a certificate.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.public_key_algorithm
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: eaaf8fd0f8e848b297ac1ade76f60060
+          name: 'Cert: Serial number'
+          type: DEPENDENT
+          key: cert.serial_number
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'The serial number is a positive integer assigned by the CA to each certificate. It is unique for each certificate issued by a given CA. Non-conforming CAs may issue certificates with serial numbers that are negative or zero.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.serial_number
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 0c6dc2da8c094667bd01c530e6b6a854
+          name: 'Cert: Fingerprint'
+          type: DEPENDENT
+          key: cert.sha1_fingerprint
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'The Certificate Signature (SHA1 Fingerprint or Thumbprint) is the hash of the entire certificate in DER form.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.sha1_fingerprint
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+          triggers:
+            - uuid: 4ff11cd912274f028035911a91062da4
+              expression: 'last(/Multiple Website certificate by Zabbix agent 2 - check on discovered host/cert.sha1_fingerprint) <> last(/Multiple Website certificate by Zabbix agent 2 - check on discovered host/cert.sha1_fingerprint,#2)'
+              name: 'Cert: Fingerprint has changed'
+              event_name: 'Cert: Fingerprint has changed (new version: {ITEM.VALUE})'
+              priority: INFO
+              description: |
+                The SSL certificate fingerprint has changed. If you did not update the certificate, it may mean your certificate has been hacked. Acknowledge to close the problem manually.
+                There could be multiple valid certificates on some installations. In this case, the trigger will have a false positive. You can ignore it or disable the trigger.
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 4a11e18eecd544c2824a68252334aaf1
+          name: 'Cert: Signature algorithm'
+          type: DEPENDENT
+          key: cert.signature_algorithm
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'The algorithm identifier for the algorithm used by the CA to sign the certificate.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.signature_algorithm
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: dfe9aa302edf42589563c0716808f7e0
+          name: 'Cert: Subject'
+          type: DEPENDENT
+          key: cert.subject
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'The field identifies the entity associated with the public key stored in the subject public key field.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.subject
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: ff90fa4f04104c15bd259fc5c5d91b40
+          name: 'Cert: Validation result'
+          type: DEPENDENT
+          key: cert.validation
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          description: 'The certificate validation result. Possible values: valid/invalid/valid-but-self-signed'
+          valuemap:
+            name: 'Cert validity'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.result.value
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  if (value === "valid") {
+                      return 1;
+                    } else if (value === "valid-but-self-signed") {
+                      return 2;
+                    } else if (value === "invalid") {
+                      return 0;
+                    } else {
+                      return -1;
+                    }
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+          triggers:
+            - uuid: 9fc31686bba74eab996446bd88cd490c
+              expression: 'last(/Multiple Website certificate by Zabbix agent 2 - check on discovered host/cert.validation)=0'
+              name: 'Cert: SSL certificate is invalid'
+              priority: HIGH
+              description: 'SSL certificate has expired or it is issued for another domain.'
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: e5a0408ea4154e15bb677377d0213c40
+          name: 'Cert: Version'
+          type: DEPENDENT
+          key: cert.version
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'The version of the encoded certificate.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.x509.version
+          master_item:
+            key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          tags:
+            - tag: component
+              value: cert
+        - uuid: 934ef6e42e564e14b10f04a1191a5fc0
+          name: 'Cert: Get'
+          key: 'web.certificate.get[{$CERT.WEBSITE.HOSTNAME},{$CERT.WEBSITE.PORT},{$CERT.WEBSITE.IP}]'
+          delay: 15m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          description: 'Returns the JSON with attributes of a certificate of the requested site.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1m
+          timeout: 5s
+          tags:
+            - tag: component
+              value: raw
+      tags:
+        - tag: class
+          value: software
+        - tag: target
+          value: certificate
+      macros:
+        - macro: '{$CERT.EXPIRY.AVER}'
+          value: '7'
+          description: 'Number of days until the certificate expires.'
+        - macro: '{$CERT.EXPIRY.WARN}'
+          value: '30'
+          description: 'Number of days until the certificate expires.'
+        - macro: '{$CERT.WEBSITE.HOSTNAME}'
+          description: 'The website DNS name for the connection.'
+        - macro: '{$CERT.WEBSITE.IP}'
+          description: 'The website IP address for the connection.'
+        - macro: '{$CERT.WEBSITE.PORT}'
+          value: '443'
+          description: 'The TLS/SSL port number of the website.'
+      valuemaps:
+        - uuid: e05f97fb91a54cfcbb366ce4fdd78068
+          name: 'Cert validity'
+          mappings:
+            - value: '0'
+              newvalue: invalid
+            - value: '1'
+              newvalue: valid
+            - value: '2'
+              newvalue: valid-but-self-signed
+            - value: '-1'
+              newvalue: unknown

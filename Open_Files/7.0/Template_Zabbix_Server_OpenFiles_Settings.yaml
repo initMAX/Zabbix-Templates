@@ -1,0 +1,128 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: initMAX
+  templates:
+    - uuid: f1285d98ed4a4458b1e4e315e1325386
+      template: 'OpenFiles Zabbix server process Settings'
+      name: 'OpenFiles Zabbix server process Settings'
+      vendor:
+        name: initMAX
+        version: 7.0-0
+      description: |
+        This template allows you to check the current OpenFiles settings for Zabbix server processes.
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      groups:
+        - name: initMAX
+      items:
+        - uuid: 4060da84d65944818434b70be56eb8ca
+          name: 'proces zabbix server'
+          key: 'proc.get[zabbix_server,zabbix,"/usr/sbin/zabbix_server -c",process]'
+          delay: 10m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: limits
+      discovery_rules:
+        - uuid: 29c3fbe687874b4d9161cedeaca7015e
+          name: 'process settings discovery'
+          type: DEPENDENT
+          key: process.settings.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: 3612e314bdfa4632866561303a741693
+              name: 'Max open files - Hard Limit'
+              type: DEPENDENT
+              key: 'open.files.hard[{#PID}]'
+              delay: '0'
+              units: '!'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@.Limit==''Max open files'')]["Hard Limit"].first()'
+              master_item:
+                key: 'vfs.file.contents[/proc/{#PID}/limits,]'
+              tags:
+                - tag: component
+                  value: limits
+              trigger_prototypes:
+                - uuid: 92942c21f9864edcabf4788b1454f4b0
+                  expression: 'last(/OpenFiles Zabbix server process Settings/open.files.hard[{#PID}])<={$OF.AVG.LIMIT}'
+                  name: 'Low openfiles Hard Limit'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+            - uuid: 1b83cb20bba945d7a52d4344565264b7
+              name: 'Max open files - Soft Limit'
+              type: DEPENDENT
+              key: 'open.files.soft[{#PID}]'
+              delay: '0'
+              units: '!'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@.Limit==''Max open files'')]["Soft Limit"].first()'
+              master_item:
+                key: 'vfs.file.contents[/proc/{#PID}/limits,]'
+              tags:
+                - tag: component
+                  value: limits
+              trigger_prototypes:
+                - uuid: 003542eb830f4dfca06e4e4983f155d2
+                  expression: 'last(/OpenFiles Zabbix server process Settings/open.files.soft[{#PID}])<={$OF.AVG.LIMIT}'
+                  name: 'Low openfiles Soft Limit'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+            - uuid: 93ebd45f390948cab57778fdc8ca0a69
+              name: 'process {#NAME}, PID: {#PID} Limits'
+              key: 'vfs.file.contents[/proc/{#PID}/limits,]'
+              history: '0'
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |2
+                          var lines = value.trim().split('\n');
+                          var headers = lines[0].split(/ {2,}/).map(function(header) {
+                              return header.trim();
+                          });
+                          var data = lines.slice(1).map(function(line) {
+                              var values = line.split(/ {2,}/).map(function(value) {
+                                  return value.trim();
+                              });
+                              var entry = {};
+                              for (var i = 0; i < headers.length; i++) {
+                                  entry[headers[i]] = values[i] || null;  // Handle missing values
+                              }
+                              return entry;
+                          });
+                          return JSON.stringify(data, null, 2);
+              tags:
+                - tag: component
+                  value: limits
+          master_item:
+            key: 'proc.get[zabbix_server,zabbix,"/usr/sbin/zabbix_server -c",process]'
+          lld_macro_paths:
+            - lld_macro: '{#CMDLINE}'
+              path: $.cmdline
+            - lld_macro: '{#NAME}'
+              path: $.name
+            - lld_macro: '{#PID}'
+              path: $.pid
+            - lld_macro: '{#PPID}'
+              path: $.ppid
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+      macros:
+        - macro: '{$OF.AVG.LIMIT}'
+          value: '1024'

@@ -1,0 +1,96 @@
+zabbix_export:
+  version: '6.0'
+  date: '2024-05-20T07:17:35Z'
+  groups:
+    - uuid: 6b17349efbed4031a77ac1907c738577
+      name: initMAX
+  templates:
+    - uuid: 7dfb9f22bf1141ecbc7f2c42432f5a59
+      template: 'Zabbix Server Version'
+      name: 'Zabbix Server Version'
+      groups:
+        - name: initMAX
+      items:
+        - uuid: 5ae76445f62d4c19adb50045e94caff3
+          name: 'Zabbix Version Status'
+          type: DEPENDENT
+          key: zabbix.version.status
+          delay: '0'
+          valuemap:
+            name: 'Version Status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.Status
+          master_item:
+            key: 'zabbix[version]'
+          tags:
+            - tag: component
+              value: version
+          triggers:
+            - uuid: c6852cb9f22b45e5912694bd5ff97f84
+              expression: 'last(/Zabbix Server Version/zabbix.version.status)=1'
+              name: 'Zabbix server version is Outdated'
+              priority: AVERAGE
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Zabbix server version is Unsupported'
+                  expression: 'last(/Zabbix Server Version/zabbix.version.status)=2'
+            - uuid: b1dd1038dc9e44588e836b7382bf2448
+              expression: 'last(/Zabbix Server Version/zabbix.version.status)=2'
+              name: 'Zabbix server version is Unsupported'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: be07c6643fe947e8a7076cf0b8393a5a
+          name: 'Curent Version'
+          type: INTERNAL
+          key: 'zabbix[version]'
+          delay: 8h
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  try {
+                  curentVersion = value;
+                  Zabbix.log(4, '[ value ]: ' + value);
+                  majorVersion = curentVersion.split('.')[0] + '.' + curentVersion.split('.')[1]; 
+                  var webRequest = new HttpRequest(),
+                      versions_URL = "https://services.zabbix.com/updates/v1?type=software_update_check&version=6.4&software_update_check_hash=4faf968011f155cddd3c2332e84f2356fc643c73081aeab906297fb6b5037603";
+                  
+                  zbx_resp = webRequest.get(versions_URL);
+                  if (webRequest.getStatus() != 200) {
+                      throw 'Response code: '+ webRequest.getStatus();
+                  } else {
+                      //Zabbix.log(3, '[ data ]: ' + zbx_resp);
+                      versions = JSON.parse(zbx_resp).versions;
+                      for (x in versions){
+                          //Zabbix.log(3, '[ version ]: ' + versions[x].version);
+                          if (versions[x].version == majorVersion){
+                              if (curentVersion == versions[x].latest_release.release) {
+                                  result = '{"Status":0,"CurentVersion":"' + curentVersion + '","LatestVersion":"' + versions[x].latest_release.release + '","Timestamp":" '+ versions[x].latest_release.created +'"}';
+                              } else {
+                                  result = '{"Status":1,"CurentVersion":"' + curentVersion + '","LatestVersion":"' + versions[x].latest_release.release + '","Timestamp":" '+ versions[x].latest_release.created +'"}';
+                              }
+                              break;
+                          }
+                          result = '{"Status":2,"CurentVersion":"' + curentVersion + '","LatestVersion":"0","Timestamp":"0"}';
+                      }
+                      return result;
+                  }
+                  }
+                  catch (error) {
+                      Zabbix.log(3, '[ version preprod ] ERROR: ' + error);
+                      throw 'preprod failed: ' + error;
+                  }
+      valuemaps:
+        - uuid: 989fea47342f44f9aade0ac4ae2523a8
+          name: 'Version Status'
+          mappings:
+            - value: '0'
+              newvalue: Curent
+            - value: '1'
+              newvalue: Outdated
+            - value: '2'
+              newvalue: Unsupported

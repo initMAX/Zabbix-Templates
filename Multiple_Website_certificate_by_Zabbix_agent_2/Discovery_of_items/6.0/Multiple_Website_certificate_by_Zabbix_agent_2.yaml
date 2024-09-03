@@ -1,0 +1,432 @@
+zabbix_export:
+  version: '6.0'
+  date: '2023-10-04T17:00:32Z'
+  groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: initMAX
+  templates:
+    - uuid: a4e5e536d2ce49b1870452f3a85e43ec
+      template: 'Multiple Website certificate by Zabbix agent 2'
+      name: 'Multiple Website certificate by Zabbix agent 2'
+      description: |
+        Based on original Zabbix template "Website certificate by Zabbix agent 2"
+        
+        Macro format:
+        <hostname1>:<443>:<IP1>,<hostname2>,<hostname3>:<port3>
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      groups:
+        - name: initMAX
+      items:
+        - uuid: f1e76e729101423da3abaf2d06530e05
+          name: 'Cert Names discovery RAW'
+          type: SCRIPT
+          key: cert.raw
+          trends: '0'
+          value_type: TEXT
+          params: |
+            // Program pro zjisteni obsahu makra na hostovi pomoci API initMAX - Alois Zadrazil
+            params = JSON.parse(value),
+            
+            pole = params.Macro.split(",");
+            out_string = '';
+            for (x in pole) {
+              polozka = pole[x].split(":");
+              out_string += '{"HOSTNAME":"'+ polozka[0]+ '"';
+              if (polozka[1]) { out_string += ',"PORT":"'+ polozka[1] + '"' ;} else { out_string += ',"PORT":""' ;}
+              if (polozka[2]) { out_string += ',"IP":"'+ polozka[2] + '"' ; } else { out_string += ',"IP":""' ; }
+              out_string+= '},';
+             }
+            out_string = out_string.substring(0, out_string.length - 1);
+            
+            return '[' + out_string + ']';
+          parameters:
+            - name: Macro
+              value: '{$CERT.ARRAY}'
+      discovery_rules:
+        - uuid: f67b0599ee564131b99530aed4064562
+          name: 'certHosts discovery'
+          type: DEPENDENT
+          key: cert.hosts.discovery
+          delay: '0'
+          lifetime: '0'
+          item_prototypes:
+            - uuid: e040b1e943c34886bef9fd19d7e3dca2
+              name: 'Cert: Subject alternative name on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.alternative_names[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.alternative_names
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: aeffb351a3b7498c9997a46515c6b7d4
+              name: 'Cert: Days to Expire of {#HOSTNAME}'
+              type: CALCULATED
+              key: 'cert.expire.timer[{#HOSTNAME}]'
+              units: '!days'
+              params: '(last(//cert.not_after[{#HOSTNAME}]) - now()) / 86400'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 1898545925464a63979b59589693755c
+              name: 'Cert: Issuer on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.issuer[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.issuer
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 4f38dfd263c044b7aebf41882a4baea8
+              name: 'Cert: Last validation status on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.message[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.result.message
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 8c9fb372813947f1a93d5ae13134f311
+              name: 'Cert: Expires on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.not_after[{#HOSTNAME}]'
+              delay: '0'
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.not_after.timestamp
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+              trigger_prototypes:
+                - uuid: f970a329c82f4bf0b3103b8cfc6a1e36
+                  expression: '(last(/Multiple Website certificate by Zabbix agent 2/cert.not_after[{#HOSTNAME}]) - now()) / 86400 < {$CERT.EXPIRY.WARN}'
+                  name: 'Cert: SSL certificate {#HOSTNAME} expires soon (less than {$CERT.EXPIRY.WARN} days)'
+                  priority: WARNING
+                  description: 'The SSL certificate should be updated or it will become untrusted.'
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Cert: SSL certificate {#HOSTNAME} is invalid'
+                      expression: 'find(/Multiple Website certificate by Zabbix agent 2/cert.validation[{#HOSTNAME}],,"like","invalid")=1'
+            - uuid: e2f017daad1144e596c6fc59e9af5370
+              name: 'Cert: Valid from on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.not_before[{#HOSTNAME}]'
+              delay: '0'
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.not_before.timestamp
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 7df1d1da88a9478cba0a03a5f634e9cd
+              name: 'Cert: Public key algorithm on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.public_key_algorithm[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.public_key_algorithm
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 915d645e50c246ba9bb0ca72755406e3
+              name: 'Cert: Serial number on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.serial_number[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.serial_number
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 05794b8c5dd7428995655e9c97282af3
+              name: 'Cert: Fingerprint on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.sha1_fingerprint[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.sha1_fingerprint
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+              trigger_prototypes:
+                - uuid: 2a36855331c3467b992c155737842daf
+                  expression: 'last(/Multiple Website certificate by Zabbix agent 2/cert.sha1_fingerprint[{#HOSTNAME}])<> last(/Multiple Website certificate by Zabbix agent 2/cert.sha1_fingerprint[{#HOSTNAME}],#2)'
+                  name: 'Cert: Fingerprint {#HOSTNAME} has changed (new version: {ITEM.VALUE})'
+                  priority: INFO
+                  description: |
+                    The SSL certificate fingerprint has changed. If you did not update the certificate, it may mean your certificate has been hacked. Ack to close.
+                    There could be multiple valid certificates on some installations. In this case, the trigger will have a false positive. You can ignore it or disable the trigger.
+                  manual_close: 'YES'
+            - uuid: 85944795b68b44739e59276b8d06b5bb
+              name: 'Cert: Signature algorithm on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.signature_algorithm[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.signature_algorithm
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 7e6367c9177b4f4f80edade3fc9f39ef
+              name: 'Cert: Subject on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.subject[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              description: 'The field identifies the entity associated with the public key stored in the subject public key field.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.subject
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 4bace56b6bc64090ba3f6536f6d43e0a
+              name: 'Cert: Validation result on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.validation[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: CHAR
+              description: 'The certificate validation result. Possible values: valid/invalid/valid-but-self-signed'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.result.value
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+              trigger_prototypes:
+                - uuid: 7660bc8261ed43bd9c15652bb7fa444e
+                  expression: 'find(/Multiple Website certificate by Zabbix agent 2/cert.validation[{#HOSTNAME}],,"like","invalid")=1'
+                  name: 'Cert: SSL certificate {#HOSTNAME} is invalid'
+                  priority: HIGH
+                  description: 'SSL certificate has expired or it is issued for another domain.'
+                  manual_close: 'YES'
+            - uuid: 1bc149911aab43bf91e8b5a5111c643f
+              name: 'Cert: Version on {#HOSTNAME}'
+              type: DEPENDENT
+              key: 'cert.version[{#HOSTNAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: CHAR
+              description: 'The version of the encoded certificate.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.x509.version
+              master_item:
+                key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              tags:
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: resource
+                  value: general
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: dependent
+                - tag: type
+                  value: gauge
+            - uuid: 4eb7862dd01947e69b278d946a875034
+              name: 'Cert: Get {#HOSTNAME}'
+              key: 'web.certificate.get[{#HOSTNAME},{#PORT},{#IP}]'
+              delay: 15m
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 6h
+              tags:
+                - tag: data
+                  value: raw
+                - tag: hostname
+                  value: '{#HOSTNAME}'
+                - tag: target
+                  value: cert
+                - tag: transport
+                  value: agent
+          master_item:
+            key: cert.raw
+          lld_macro_paths:
+            - lld_macro: '{#HOSTNAME}'
+              path: $.HOSTNAME
+            - lld_macro: '{#IP}'
+              path: $.IP
+            - lld_macro: '{#PORT}'
+              path: $.PORT
+      macros:
+        - macro: '{$CERT.ARRAY}'
+          value: '<hostname1>:<443>:<IP1>,<hostname2>:<443>:<IP2>'
+          description: 'Array of hostnames, IP addresses and ports.'
+        - macro: '{$CERT.EXPIRY.WARN}'
+          value: '7'
+          description: 'Number of days until the certificate expires.'
+        - macro: '{$CERT.WEBSITE.HOSTNAME}'
+          value: '<Put DNS name>'
+          description: 'The website DNS name for the connection.'
+        - macro: '{$CERT.WEBSITE.IP}'
+          description: 'The website IP address for the connection.'
+        - macro: '{$CERT.WEBSITE.PORT}'
+          value: '443'
+          description: 'The TLS/SSL port number of the website.'

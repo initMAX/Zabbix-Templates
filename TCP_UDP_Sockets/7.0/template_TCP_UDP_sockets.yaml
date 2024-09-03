@@ -1,0 +1,214 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: initMAX
+  templates:
+    - uuid: 0c2d02b20f964c22bb270867448c0f57
+      template: 'Template TCP UDP sockets'
+      name: 'Template TCP UDP sockets'
+      groups:
+        - name: initMAX
+      vendor:
+        name: initMAX
+        version: 7.0-0
+      description: |
+        TCP/UDP sockets
+
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      items:
+        - uuid: 2f91a59bd0f74a1c95244bf5b7bd7b54
+          name: 'TCP socket close'
+          key: 'net.tcp.socket.count[,,,,close]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 5f9e5438cce04a339d5e989078b9a1cf
+          name: 'TCP socket close-wait'
+          key: 'net.tcp.socket.count[,,,,close_wait]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 28e8110f5db64a32a56a1506f429c9f3
+          name: 'TCP socket closing'
+          key: 'net.tcp.socket.count[,,,,closing]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 76aab9e0733144ca8ca6f5b440c7a6a8
+          name: 'TCP socket established'
+          key: 'net.tcp.socket.count[,,,,established]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 91a411ef91d849249ef7da198788fdde
+          name: 'TCP socket fin-wait-1'
+          key: 'net.tcp.socket.count[,,,,fin_wait1]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 47c5734033564a92ac9e16b040181a13
+          name: 'TCP socket fin-wait-2'
+          key: 'net.tcp.socket.count[,,,,fin_wait2]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 19b55a92710a4cb2acbe2dbbaed0b241
+          name: 'TCP socket last-ack'
+          key: 'net.tcp.socket.count[,,,,last_ack]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: a1deb51326284541aeb521caae4c7208
+          name: 'TCP socket listen'
+          key: 'net.tcp.socket.count[,,,,listen]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 37a648d326c84b5db3073771865242b1
+          name: 'TCP socket syn-recv'
+          key: 'net.tcp.socket.count[,,,,syn_recv]'
+          history: 30d
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1'
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: ffa08b0b84bb4c0ca85900a01ed0d752
+          name: 'TCP socket syn-sent'
+          key: 'net.tcp.socket.count[,,,,syn_sent]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: b3023c5fbc9f4eed826b5822f07a85dc
+          name: 'TCP socket time-wait'
+          key: 'net.tcp.socket.count[,,,,time_wait]'
+          history: 30d
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1'
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 6aea72ef86d74d6cbed87fb11ed88591
+          name: 'UDP socket established'
+          key: 'net.udp.socket.count[,,,,established]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+        - uuid: 1d051c5a31af45e0bc1b1d349869709c
+          name: 'UDP socket unconn'
+          key: 'net.udp.socket.count[,,,,unconn]'
+          history: 30d
+          tags:
+            - tag: Application
+              value: TCP
+      dashboards:
+        - uuid: 6129e87f9376421ba9c7297a59fc2568
+          name: 'TCP/UDP Sockets'
+          pages:
+            - widgets:
+                - type: honeycomb
+                  name: TCP
+                  width: '24'
+                  height: '8'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'TCP*'
+                    - type: STRING
+                      name: primary_label
+                      value: '{ITEM.NAME}'
+                    - type: STRING
+                      name: reference
+                      value: TRBQX
+                - type: honeycomb
+                  name: UDP
+                  'y': '8'
+                  width: '24'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'UDP*'
+                    - type: STRING
+                      name: primary_label
+                      value: '{ITEM.NAME}'
+                    - type: STRING
+                      name: reference
+                      value: AXDRP
+                - type: svggraph
+                  x: '24'
+                  width: '24'
+                  height: '11'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: 4000FF
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'TCP*'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '1'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '10'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: YQSCO
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: svggraph
+                  x: '48'
+                  width: '24'
+                  height: '11'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'UDP*'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '0'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '10'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: IWLSQ
+                    - type: INTEGER
+                      name: righty
+                      value: '0'

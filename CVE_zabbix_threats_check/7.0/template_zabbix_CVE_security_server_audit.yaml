@@ -1,0 +1,434 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: initMAX
+  templates:
+    - uuid: 53be801b348b4a8baac5a965b0b47c61
+      template: 'Zabbix CVE security server audit'
+      name: 'Zabbix CVE security server audit'
+      vendor:
+        name: initMAX
+        version: 7.0-0
+      description: |
+        This template has single item which gets current zabbix server verison and compares it with Zabbix CVE page published at https://www.zabbix.com/security_advisories. When actual CVE is found, LLD rule creates item and trigger with published severity.
+  
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      groups:
+        - name: initMAX
+      items:
+        - uuid: 2143a301b11747b2b92d993ac03584f7
+          name: 'CVE Count'
+          type: DEPENDENT
+          key: cve.count
+          valuemap:
+            name: 'CVE count'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return JSON.parse(value).length;'
+          master_item:
+            key: 'cve.zabbix[version]'
+          triggers:
+            - uuid: 25d61535b7e8448eb188611376ac49e0
+              expression: 'last(/Zabbix CVE security server audit/cve.count)>0'
+              name: 'CVE found for curent Zabbix version'
+              event_name: '!! CVE found for curent Zabbix version'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: e8db4c53fb904b61b2fa40fdc6222dcf
+          name: 'CVE Version'
+          type: DEPENDENT
+          key: 'cve.zabbix[version]'
+          history: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function extractCVEInfo(html) {
+                      var cveData = [];
+                      //var rowRegex = /<tr class="small hoverable jsFilterElement"[^>]*>[\s\S]*?<\/tr>/g;
+                      //var rowRegex = /<tr class="small hoverable jsFilterElement"[^>]*>[\s\S]*?<tr class="small hoverable jsFilterElement"/g;
+                      //var rowRegex = /<tr class="small hoverable jsFilterElement"[^>]*>[\s\S]*<td>2024 Aug 09<\/td>.*<\/tr>/g;
+                      var rowRegex = /<tr class="small hoverable jsFilterElement"/;
+                      rows = html.split(rowRegex);
+                      //return htmlArray[1];
+                   
+                      if (!rows) {
+                          return JSON.stringify([]);
+                      }
+                  
+                      rows.forEach(function(row) {
+                          var cve = {};
+                          //Zabbix.log(3, ' Row: ' + row);
+                          var zbvIdMatch = row.match(/<a id="([^"]+)" href="#[^"]+" class="clickable-anchor">([^<]+)<\/a>/);
+                          if (zbvIdMatch) {
+                              cve.zbvId = zbvIdMatch[2];
+                          }
+                  
+                          var cveIdMatch = row.match(/<td>(CVE-[\d-]+)<\/td>/);
+                          if (cveIdMatch) {
+                              cve.cveId = cveIdMatch[1];
+                          }
+                  
+                          var cvssScoreMatch = row.match(/<span class="cvss_score cvss_score_(critical|high|low|medium)">([\d.]+)<\/span>/);
+                          if (cvssScoreMatch) {
+                              cve.cvssScore = cvssScoreMatch[2];
+                          }
+                  
+                          var severityMatch = row.match(/<span class="cvss_score cvss_score_(critical|high|low|medium)">(\w+)<\/span>/);
+                          if (severityMatch) {
+                              cve.severity = severityMatch[2];
+                          }
+                  
+                          var synopsisMatch = row.match(/<a class="red"[^>]+>([^<]+)<\/a>/);
+                          if (synopsisMatch) {
+                              cve.synopsis = synopsisMatch[1].trim();
+                          }
+                  
+                          //var detailSectionMatch = row.match(/<div id="record_card_[^"]+" class="section hidden">([\s\S]*?)<\/div>/);
+                          var detailSectionMatch = row.match(/<div class="partner-text">([\s\S]*?)<\/div>/);
+                          if (detailSectionMatch) {
+                              var details = detailSectionMatch[1];
+                              
+                              var detailRegex = /<th class="b nowrap">([^<]+):<\/th>\s*<td[^>]*>([^<]+)<\/td>/g;
+                              var detailMatch;
+                              while ((detailMatch = detailRegex.exec(details)) !== null) {
+                                  var header = detailMatch[1].trim();
+                                  var content = detailMatch[2].trim();
+                  
+                                  switch (header) {
+                                      case 'CVE/Advisory number':
+                                          cve.advisoryNumber = content;
+                                          break;
+                                      case 'Synopsis':
+                                          cve.synopsis = content;
+                                          break;
+                                      case 'Description':
+                                          cve.description = content;
+                                          break;
+                                      case 'Known Attack Vectors':
+                                          cve.attackVectors = content;
+                                          break;
+                                      case 'Resolution':
+                                          cve.resolution = content;
+                                          break;
+                                      case 'Workaraunds':
+                                          cve.workarounds = content;
+                                          break;
+                                      case 'Acknowledgements':
+                                          cve.acknowledgements = content;
+                                          break;
+                                  }
+                              }
+                  
+                              //var versionRegex = /<tr class="hoverable">\s*<td width="50%">([^<]+)<\/td>\s*<td>([^<]+)<\/td>/g;
+                              //var versionRegex =/<table class="table-versions" width="100%">((\s|\S)+?)<\/table>/g;
+                              var versionRegex =/<td width="50%">(\d\.\d\.[\d|\w]+)\s*-\s*(.*) <\/td>/g;
+                              cve.versions = [];
+                              var versionMatch;
+                              //Zabbix.log(3, ' Debug: ' + details);
+                              //Zabbix.log(3, ' Debug: ' + versionRegex.exec(details));
+                              
+                              while ((versionMatch = versionRegex.exec(details)) !== null) {
+                                  //Zabbix.log(3, ' Debug: ' + versionMatch[1] + ' - ' + versionMatch[2]);
+                                  cve.versions.push({ affected: versionMatch[1].trim(), fix: versionMatch[2].trim() });
+                              }
+                          }
+                  
+                          cveData.push(cve);
+                      });
+                  
+                      return JSON.stringify(cveData);
+                  }
+                  
+                  function compareVersions(v1, v2) {
+                      function parseVersion(version) {
+                          // Split the version into numeric parts and suffix
+                          var parts = version.match(/^(\d+)\.(\d+)\.(\d+)([a-zA-Z]+)?(\d+)?$/);
+                          if (!parts) {
+                              throw new Error('Invalid version format: ' + version);
+                          }
+                  
+                          // Convert the numeric parts to numbers
+                          var major = parseInt(parts[1], 10);
+                          var minor = parseInt(parts[2], 10);
+                          var patch = parseInt(parts[3], 10);
+                  
+                          // Handle the suffix, defaulting to an empty string if not present
+                          var suffix = parts[4] || '';
+                          var suffixNum = parseInt(parts[5] || '0', 10); // Handle numeric suffix part if present
+                  
+                          // Map suffixes to a comparable value
+                          var suffixOrder = {
+                              'alfa': 1,
+                              'beta': 2,
+                              'rc': 3,
+                              '': 4 // No suffix is considered greater than any suffix
+                          };
+                  
+                          return {
+                              major: major,
+                              minor: minor,
+                              patch: patch,
+                              suffix: suffixOrder[suffix] || 0, // 0 for unknown suffixes
+                              suffixNum: suffixNum
+                          };
+                      }
+                  
+                      var v1Parsed = parseVersion(v1);
+                      var v2Parsed = parseVersion(v2);
+                  
+                      // Compare major, minor, patch
+                      if (v1Parsed.major !== v2Parsed.major) return v1Parsed.major - v2Parsed.major;
+                      if (v1Parsed.minor !== v2Parsed.minor) return v1Parsed.minor - v2Parsed.minor;
+                      if (v1Parsed.patch !== v2Parsed.patch) return v1Parsed.patch - v2Parsed.patch;
+                  
+                      // Compare suffix (alfa < beta < rc < no suffix)
+                      if (v1Parsed.suffix !== v2Parsed.suffix) return v1Parsed.suffix - v2Parsed.suffix;
+                  
+                      // Compare the numeric part after the suffix
+                      return v1Parsed.suffixNum - v2Parsed.suffixNum;
+                  }
+                  
+                  function isVersionInRange(lowerVersion, upperVersion, versionToCheck) {
+                      return compareVersions(lowerVersion, versionToCheck) <= 0 && compareVersions(versionToCheck, upperVersion) < 0;
+                  }
+                  
+                  
+                  
+                  var cveRequest = new HttpRequest();
+                  var htmlContent = cveRequest.get("https://www.zabbix.com/security_advisories");
+                  
+                  //return htmlContent;
+                  var cveJSON =  JSON.parse(extractCVEInfo(htmlContent));
+                  var versionToCheck = value;
+                  var cveMatchList = [];
+                  
+                  //Zabbix.log(3, ' CVE : ' + JSON.stringify(cveJSON));
+                  
+                  for (i in cveJSON){
+                      // Zabbix.log(3, ' CVE : ' + JSON.stringify(cveJSON[i]));
+                      for (j in cveJSON[i].versions){ 
+                          if (cveJSON[i].versions[j].affected) lowerVersion = cveJSON[i].versions[j].affected.replace(/\*/g, "100")
+                          else lowerVersion = "0.0.0";
+                          if (cveJSON[i].versions[j].fix) upperVersion = cveJSON[i].versions[j].fix.replace(/\*/g, "100")
+                          else upperVersion = "9.9.9";
+                          //Zabbix.log(3, 'Comparing: ' + value + ' Lower: ' + lowerVersion + ' Fix: ' + upperVersion);
+                          try {
+                          if (isVersionInRange(lowerVersion, upperVersion, versionToCheck)) {
+                              Zabbix.log(3, ' CVE Match: ' + cveJSON[i].cveId);
+                              cveMatchList.push(cveJSON[i]);
+                              //return (versionToCheck + " is within the range " + lowerVersion + " - " + upperVersion);
+                          } else {
+                              //return(versionToCheck + " is NOT within the range " + lowerVersion + " - " + upperVersion);
+                          }
+                      }catch (error) {
+                              Zabbix.log(3, 'ERROR: ' + error);
+                           //   throw 'Sending failed: ' + error;
+                          }
+                          
+                      }
+                  }
+                  
+                  return JSON.stringify(cveMatchList);
+          master_item:
+            key: 'zabbix[version]'
+        - uuid: aa61c06560b945fd9269a64588f9e50a
+          name: 'Zabbix Version Status'
+          type: DEPENDENT
+          key: zabbix.version.status
+          history: 90d
+          valuemap:
+            name: 'Version status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.Status
+          master_item:
+            key: 'zbx.zabbix[version]'
+          tags:
+            - tag: component
+              value: versions
+          triggers:
+            - uuid: 281df47be984456889ab846c62043dc2
+              expression: 'last(/Zabbix CVE security server audit/zabbix.version.status)=1'
+              name: 'Zabbix server version is Outdated'
+              priority: AVERAGE
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Zabbix server version is Unsupported'
+                  expression: 'last(/Zabbix CVE security server audit/zabbix.version.status)=2'
+            - uuid: 88ee46ed6c304c3db1a7b9990197f403
+              expression: 'last(/Zabbix CVE security server audit/zabbix.version.status)=2'
+              name: 'Zabbix server version is Unsupported'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: 0658bdb3ec914bbb8aa5e1a533619c91
+          name: 'Zabbix version'
+          type: INTERNAL
+          key: 'zabbix[version]'
+          delay: 1h
+          value_type: TEXT
+        - uuid: 473274371d5442f4ad3e3e986332d5b3
+          name: 'Curent Version'
+          type: DEPENDENT
+          key: 'zbx.zabbix[version]'
+          history: 90d
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  try {
+                  curentVersion = value;
+                  Zabbix.log(4, '[ value ]: ' + value);
+                  majorVersion = curentVersion.split('.')[0] + '.' + curentVersion.split('.')[1]; 
+                  var webRequest = new HttpRequest(),
+                      versions_URL = "https://services.zabbix.com/updates/v1?type=software_update_check&version=6.4&software_update_check_hash=4faf968011f155cddd3c2332e84f2356fc643c73081aeab906297fb6b5037603";
+                  
+                  zbx_resp = webRequest.get(versions_URL);
+                  if (webRequest.getStatus() != 200) {
+                      throw 'Response code: '+ webRequest.getStatus();
+                  } else {
+                      //Zabbix.log(3, '[ data ]: ' + zbx_resp);
+                      versions = JSON.parse(zbx_resp).versions;
+                      for (x in versions){
+                          //Zabbix.log(3, '[ version ]: ' + versions[x].version);
+                          if (versions[x].version == majorVersion){
+                              if (curentVersion == versions[x].latest_release.release) {
+                                  result = '{"Status":0,"CurentVersion":"' + curentVersion + '","LatestVersion":"' + versions[x].latest_release.release + '","Timestamp":" '+ versions[x].latest_release.created +'"}';
+                              } else {
+                                  result = '{"Status":1,"CurentVersion":"' + curentVersion + '","LatestVersion":"' + versions[x].latest_release.release + '","Timestamp":" '+ versions[x].latest_release.created +'"}';
+                              }
+                              break;
+                          }
+                          result = '{"Status":2,"CurentVersion":"' + curentVersion + '","LatestVersion":"0","Timestamp":"0"}';
+                      }
+                      return result;
+                  }
+                  }
+                  catch (error) {
+                      Zabbix.log(3, '[ version preprod ] ERROR: ' + error);
+                      throw 'preprod failed: ' + error;
+                  }
+          master_item:
+            key: 'zabbix[version]'
+          tags:
+            - tag: component
+              value: versions
+      discovery_rules:
+        - uuid: 546da4338c434ccb9cc3213f4e8800d9
+          name: 'CVE Discovery'
+          type: DEPENDENT
+          key: cve.discovery
+          lifetime_type: DELETE_IMMEDIATELY
+          item_prototypes:
+            - uuid: d62ff1b9fa6e4290b016c8cc381b689e
+              name: 'CVE - {#CBVSEVERITY} - {#ZBVID}'
+              type: DEPENDENT
+              key: 'cve[{#ZBVID}]'
+              value_type: TEXT
+              description: '{#CBVDESCRIPTION}'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@.zbvId==''{#ZBVID}'')].severity'
+                - type: TRIM
+                  parameters:
+                    - '[]"'
+              master_item:
+                key: 'cve.zabbix[version]'
+              trigger_prototypes:
+                - uuid: 9bfb4768c9e34ed4af30416b205e30c4
+                  expression: |
+                    last(/Zabbix CVE security server audit/cve[{#ZBVID}])="Critical" or 
+                    last(/Zabbix CVE security server audit/cve[{#ZBVID}])="High" or
+                    last(/Zabbix CVE security server audit/cve[{#ZBVID}])="Medium" or 
+                    last(/Zabbix CVE security server audit/cve[{#ZBVID}])="Low"
+                  name: '{#CBVSEVERITY} CVE Problem Found - {#ZBVID}'
+                  priority: DISASTER
+                  description: '{#CBVDESCRIPTION}'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: CBVSEVERITY
+                      value: '{#CBVSEVERITY}'
+                    - tag: CVBID
+                      value: '{#CBVID}'
+                    - tag: CVSSSCORE
+                      value: '{#CVSSSCORE}'
+                    - tag: 'Zabbix ID'
+                      value: '{#ZBVID}'
+          master_item:
+            key: 'cve.zabbix[version]'
+          lld_macro_paths:
+            - lld_macro: '{#CBVDESCRIPTION}'
+              path: $.description
+            - lld_macro: '{#CBVID}'
+              path: $.cveId
+            - lld_macro: '{#CBVSEVERITY}'
+              path: $.severity
+            - lld_macro: '{#CVSSSCORE}'
+              path: $.cvssScore
+            - lld_macro: '{#ZBVID}'
+              path: $.zbvId
+          overrides:
+            - name: 'High Severity'
+              step: '1'
+              filter:
+                conditions:
+                  - macro: '{#CBVSEVERITY}'
+                    value: High
+              operations:
+                - operationobject: TRIGGER_PROTOTYPE
+                  value: 'CVE Problem Found'
+                  discover: DISCOVER
+                  status: ENABLED
+                  severity: HIGH
+            - name: 'Medium Severity'
+              step: '2'
+              filter:
+                conditions:
+                  - macro: '{#CBVSEVERITY}'
+                    value: Medium
+              operations:
+                - operationobject: TRIGGER_PROTOTYPE
+                  value: 'CVE Problem Found'
+                  discover: DISCOVER
+                  status: ENABLED
+                  severity: AVERAGE
+            - name: 'Low Severity'
+              step: '3'
+              filter:
+                conditions:
+                  - macro: '{#CBVSEVERITY}'
+                    value: Low
+              operations:
+                - operationobject: TRIGGER_PROTOTYPE
+                  value: 'CVE Problem Found'
+                  discover: DISCOVER
+                  status: ENABLED
+                  severity: WARNING
+      valuemaps:
+        - uuid: c8219d5854344f5995562b96e629cdbf
+          name: 'CVE count'
+          mappings:
+            - value: '0'
+              newvalue: OK
+            - type: GREATER_OR_EQUAL
+              value: '1'
+              newvalue: 'Security problem'
+        - uuid: f6aad90cf01b4ac08979ea491311b4e2
+          name: 'Version status'
+          mappings:
+            - value: '0'
+              newvalue: Supported
+            - value: '1'
+              newvalue: Unsupported
+            - value: '2'
+              newvalue: Outdated
