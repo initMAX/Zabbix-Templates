@@ -1,0 +1,1675 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 5b3faa6e8c604404be9e7c0770cf2f1b
+      name: Templates/Applications
+  templates:
+    - uuid: d76f20738d7a4a68a5a0b6750d144f9a
+      template: 'FreeIPA Client'
+      name: 'FreeIPA Client'
+      description: |
+        Native-first monitoring for FreeIPA clients.
+
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-1
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: 8b8fa3e898204302a486daeedab37934
+          name: 'IPA packages: RAW'
+          description: |
+            Collects package inventory filtered by {$IPA.PACKAGES.MATCH} using system.sw.packages.get.
+            Expected value: JSON array of matching packages; empty array means no matches or no access.
+            History is disabled for this item, so the history tab is empty by design.
+          key: 'system.sw.packages.get[{$IPA.PACKAGES.MATCH}]'
+          delay: 1h
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: Version
+            - tag: FreeIPA
+              value: RAW
+        - uuid: 10037a66351443ae99279b791efea417
+          name: 'Kerberos: keytab test'
+          description: |
+            Runs kinit using /etc/krb5.keytab via userparameter.
+            Expected value: 1 = keytab works and TGT acquired, 0 = failure (bad keytab, wrong principal, or permissions).
+            The principal defaults to host/<FQDN>.
+            If {$IPA.KINIT.REALM} is set, it is appended as principal@REALM.
+          key: 'ipa.kerberos.kinit[{$IPA.KINIT.REALM}]'
+          delay: 10m
+          history: 90d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Kerberos keytab test'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: Kerberos
+          triggers:
+            - uuid: 19478595aa474a2f86b3808a8a3f6ed8
+              expression: 'last(/FreeIPA Client/ipa.kerberos.kinit[{$IPA.KINIT.REALM}])=0'
+              name: 'Kerberos keytab test failed'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: 775cabfabd3241d092ccb496558b5988
+          name: 'SSH login & home check: raw'
+          description: |
+            SSH agent check that logs in with {$IPA.SSH.USER} and verifies {$IPA.SSH.HOME.FILE} in the home directory.
+            Expected value: 1 = OK, 2 = NOFILE (home marker missing).
+          type: SSH
+          key: ssh.run
+          delay: 10m
+          history: 7d
+          trends: 365d
+          value_type: UNSIGNED
+          authtype: PASSWORD
+          username: '{$IPA.SSH.USER}'
+          password: '{$IPA.SSH.PASS}'
+          params: 'test -f "$HOME/{$IPA.SSH.HOME.FILE}" && echo OK || echo NOFILE'
+          timeout: 10s
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  if (value === "OK") {
+                    return "1";
+                  }
+                  if (value === "NOFILE") {
+                    return "2";
+                  }
+                  throw "ERROR: unexpected SSH output";
+          valuemap:
+            name: 'SSH login & home status'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: SSH
+            - tag: FreeIPA
+              value: RAW
+          triggers:
+            - uuid: 8b1c396947af40c0b85fada487d90784
+              expression: 'nodata(/FreeIPA Client/ssh.run,{$IPA.SSH.NODATA.WINDOW})=1 and count(/FreeIPA Client/ssh.run,#1)=1'
+              name: 'SSH login failed'
+              priority: HIGH
+              manual_close: 'YES'
+            - uuid: 4034a87414874e2eb52b2ca664a35b7b
+              expression: 'last(/FreeIPA Client/ssh.run)=2'
+              name: 'SSH login ok but ~/.ZABBIX is missing'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 568d0e7063eb4a55bda38a10608faccc
+          name: 'Kerberos: keytab file exists'
+          description: |
+            Checks if /etc/krb5.keytab exists on the client.
+            Expected value: 1 = exists, 0 = missing.
+          key: 'vfs.file.exists[/etc/krb5.keytab]'
+          delay: 10m
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Kerberos keytab file'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: Kerberos
+          triggers:
+            - uuid: 523cae4e8e5a41dd8612d76efd304eed
+              expression: 'last(/FreeIPA Client/vfs.file.exists[/etc/krb5.keytab])=0'
+              name: 'Kerberos keytab file is missing'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: 7e3d72d782b54b15a0b5465bbfab10c9
+          name: 'DNS resolver: resolv.conf raw'
+          description: |
+            Reads /etc/resolv.conf on the client.
+            Expected value: full file content; empty means file missing or unreadable.
+          key: 'vfs.file.contents[/etc/resolv.conf]'
+          delay: 10m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+            - tag: FreeIPA
+              value: RAW
+        - uuid: 42cedbaaf5ba4136b82ed73ecba22077
+          name: 'DNS resolver: servers'
+          description: |
+            Parses nameserver entries from /etc/resolv.conf.
+            Expected value: space-separated list of DNS servers; empty means none found.
+          type: DEPENDENT
+          key: ipa.dns.resolv.servers
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var servers = [];
+                  var lines = value.split('\n');
+                  for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].replace(/#.*/, '').trim();
+                    if (!line) continue;
+                    var parts = line.split(/\s+/);
+                    if (parts[0] === 'nameserver' && parts[1]) {
+                      servers.push(parts[1]);
+                    }
+                  }
+                  return servers.join(' ');
+          master_item:
+            key: 'vfs.file.contents[/etc/resolv.conf]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+          triggers:
+            - uuid: f8fc37fcc6c14ae29acef6b746861bc1
+              expression: 'find(/FreeIPA Client/ipa.dns.resolv.servers,,"regexp","{$IPA.DNS.SERVERS.MATCH}")=0 or find(/FreeIPA Client/ipa.dns.resolv.servers.invalid,,"regexp",".+")=1'
+              name: 'DNS resolver servers do not match expected IPA servers'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: ed50ab04d5114497a655d2a084100844
+          name: 'DNS resolver: unexpected servers'
+          description: |
+            Lists nameserver entries that do not match {$IPA.DNS.SERVERS.MATCH}.
+            Expected value: empty when only IPA DNS servers are configured; otherwise list of unexpected servers.
+          type: DEPENDENT
+          key: ipa.dns.resolv.servers.invalid
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var match = "{$IPA.DNS.SERVERS.MATCH}";
+                  var re = new RegExp("^(?:" + match + ")$", "i");
+                  var servers = [];
+                  var lines = value.split('\n');
+                  for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].replace(/#.*/, '').trim();
+                    if (!line) continue;
+                    var parts = line.split(/\s+/);
+                    if (parts[0] !== 'nameserver' || !parts[1]) continue;
+                    if (!re.test(parts[1])) servers.push(parts[1]);
+                  }
+                  return servers.join(' ');
+          master_item:
+            key: 'vfs.file.contents[/etc/resolv.conf]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+        - uuid: 3da53114f25347dbac4d371649925950
+          name: 'DNS resolver: search domains'
+          description: |
+            Parses search/domain entries from /etc/resolv.conf.
+            Expected value: space-separated list of search domains; empty means none configured.
+          type: DEPENDENT
+          key: ipa.dns.resolv.search
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var domains = [];
+                  var lines = value.split('\n');
+                  for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].replace(/#.*/, '').trim();
+                    if (!line) continue;
+                    var parts = line.split(/\s+/);
+                    if (parts[0] === 'search' && parts.length > 1) {
+                      domains = domains.concat(parts.slice(1));
+                    } else if (parts[0] === 'domain' && parts[1]) {
+                      domains.push(parts[1]);
+                    }
+                  }
+                  return domains.join(' ');
+          master_item:
+            key: 'vfs.file.contents[/etc/resolv.conf]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+          triggers:
+            - uuid: 3aff5e68d92a4a04b7d2e33f913c6f68
+              expression: 'find(/FreeIPA Client/ipa.dns.resolv.search,,"regexp","{$IPA.DNS.SEARCH.MATCH}")=0'
+              name: 'DNS search domain does not match expected value'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 2e34875c2f884c71ae8cdec759d094db
+          name: 'DNS query: response time'
+          description: |
+            Performs DNS query for {$IPA.DNS.TEST.NAME} type A using the local resolver.
+            Expected value: response time in seconds; 0 means query failed or DNS down.
+          key: 'net.dns.perf[,{$IPA.DNS.TEST.NAME},A]'
+          delay: 1m
+          history: 90d
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+          triggers:
+            - uuid: 30f3724e9cd04ebea2f0aef67079c709
+              expression: 'last(/FreeIPA Client/net.dns.perf[,{$IPA.DNS.TEST.NAME},A])=0'
+              name: 'DNS query failed'
+              priority: HIGH
+              manual_close: 'YES'
+            - uuid: 446f217afaca4921869ebca96d0c16fa
+              expression: 'avg(/FreeIPA Client/net.dns.perf[,{$IPA.DNS.TEST.NAME},A],5m)>{$IPA.DNS.RESP.TIME.CRIT}'
+              name: 'DNS response time is high (critical)'
+              priority: HIGH
+              manual_close: 'YES'
+            - uuid: e8cd136d162b4bddb269480e1e7a7a47
+              expression: 'avg(/FreeIPA Client/net.dns.perf[,{$IPA.DNS.TEST.NAME},A],5m)>{$IPA.DNS.RESP.TIME.WARN} and avg(/FreeIPA Client/net.dns.perf[,{$IPA.DNS.TEST.NAME},A],5m)<={$IPA.DNS.RESP.TIME.CRIT}'
+              name: 'DNS response time is high (warning)'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: fa76cb44ea7c4851801521c8dc1e3e95
+          name: 'DNS query: A record'
+          description: |
+            Queries A record for {$IPA.DNS.TEST.NAME} using the local resolver.
+            Expected value: DNS response with A records; empty means no record or resolver error.
+          key: 'net.dns.record[,{$IPA.DNS.TEST.NAME},A]'
+          delay: 5m
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+            - tag: FreeIPA
+              value: RAW
+        - uuid: dcb0c9a0a50344b09adba71495878f4d
+          name: 'DNS query: A record normalized (local resolver)'
+          description: |
+            Normalized list of A record IPs for {$IPA.DNS.TEST.NAME} from the local resolver.
+            Expected value: space-separated list of IPs; empty means no A records found.
+          type: DEPENDENT
+          key: ipa.dns.test.a.normalized.local
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var ips = value.match(/\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b/g);
+                  if (!ips) return '';
+                  var seen = {};
+                  var out = [];
+                  for (var i = 0; i < ips.length; i++) {
+                    if (seen[ips[i]]) continue;
+                    seen[ips[i]] = true;
+                    out.push(ips[i]);
+                  }
+                  out.sort();
+                  return out.join(' ');
+          master_item:
+            key: 'net.dns.record[,{$IPA.DNS.TEST.NAME},A]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+        - uuid: 0655346c33364fa6ae66edcd57336252
+          name: 'DNS SRV _kerberos: record'
+          description: |
+            Performs SRV lookup for _kerberos._tcp.{$IPA.DNS.SRV.DOMAIN} using the local resolver.
+            Expected value: DNS response string containing 'SRV'; empty or missing 'SRV' means record not found.
+          key: 'net.dns.record[,_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+          delay: 5m
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+            - tag: FreeIPA
+              value: SRV
+            - tag: FreeIPA
+              value: RAW
+          triggers:
+            - uuid: d9c0d66cd47c4cb8b650908ab0f775fa
+              expression: 'count(/FreeIPA Client/net.dns.record[,_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],#1)=1 and (find(/FreeIPA Client/net.dns.record[,_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],,"regexp","\\sSRV\\s")=0 or nodata(/FreeIPA Client/net.dns.record[,_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],{$IPA.DNS.NODATA.WINDOW})=1)'
+              name: 'DNS SRV _kerberos record not found'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: cc9f2c74a26144cbb66e6b758a86be80
+          name: 'DNS SRV _kerberos: normalized targets (local resolver)'
+          description: |
+            Normalized list of SRV targets from the local resolver, used for cross-resolver comparison.
+            Expected value: space-separated list of "target:port" pairs; empty means no SRV targets.
+          type: DEPENDENT
+          key: ipa.dns.srv.kerberos.normalized.local
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var out = [];
+                  var lines = value.split('\\n');
+                  for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line) continue;
+                    var parts = line.split(/\\s+/);
+                    var idx = parts.indexOf('SRV');
+                    if (idx === -1 || parts.length < idx + 5) continue;
+                    var port = parts[idx + 3];
+                    var target = parts[idx + 4];
+                    if (!target) continue;
+                    target = target.replace(/\\.$/, '');
+                    out.push(target + ':' + port);
+                  }
+                  out.sort();
+                  return out.join(' ');
+          master_item:
+            key: 'net.dns.record[,_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+            - tag: FreeIPA
+              value: SRV
+        - uuid: 3d85b45afe1a450a98d5d19b217ce469
+          name: 'DNS SRV _ldap: record'
+          description: |
+            Performs SRV lookup for _ldap._tcp.{$IPA.DNS.SRV.DOMAIN} using the local resolver.
+            Expected value: DNS response string containing 'SRV'; empty or missing 'SRV' means record not found.
+          key: 'net.dns.record[,_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+          delay: 5m
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+            - tag: FreeIPA
+              value: SRV
+            - tag: FreeIPA
+              value: RAW
+          triggers:
+            - uuid: fe14f926316c483a9c8760c64a05b117
+              expression: 'count(/FreeIPA Client/net.dns.record[,_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],#1)=1 and (find(/FreeIPA Client/net.dns.record[,_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],,"regexp","\\sSRV\\s")=0 or nodata(/FreeIPA Client/net.dns.record[,_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],{$IPA.DNS.NODATA.WINDOW})=1)'
+              name: 'DNS SRV _ldap record not found'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: 3b04f3403d444e38a5e60d3c10f1d6dd
+          name: 'DNS SRV _ldap: normalized targets (local resolver)'
+          description: |
+            Normalized list of SRV targets from the local resolver, used for cross-resolver comparison.
+            Expected value: space-separated list of "target:port" pairs; empty means no SRV targets.
+          type: DEPENDENT
+          key: ipa.dns.srv.ldap.normalized.local
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var out = [];
+                  var lines = value.split('\n');
+                  for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line) continue;
+                    var parts = line.split(/\s+/);
+                    var idx = parts.indexOf('SRV');
+                    if (idx === -1 || parts.length < idx + 5) continue;
+                    var port = parts[idx + 3];
+                    var target = parts[idx + 4];
+                    if (!target) continue;
+                    target = target.replace(/\.$/, '');
+                    out.push(target + ':' + port);
+                  }
+                  out.sort();
+                  return out.join(' ');
+          master_item:
+            key: 'net.dns.record[,_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: DNS
+            - tag: FreeIPA
+              value: SRV
+        - uuid: 4a04283670f4402796649944b6fd44c6
+          name: 'SSSD service: raw'
+          description: |
+            Raw systemd.unit.get output for sssd.service.
+            SSSD provides identity and authentication for IPA clients.
+            Expected value: JSON with ActiveState/SubState/LoadState; empty means systemd query failed.
+          key: 'systemd.unit.get[sssd.service]'
+          delay: 1m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: SSSD
+            - tag: FreeIPA
+              value: RAW
+        - uuid: bb81c7b2d9024c428d823511ffdcca27
+          name: 'SSSD service: ActiveState'
+          description: |
+            Extracted ActiveState from systemd JSON for sssd.service.
+            Expected value: "active" when healthy; other values include "inactive", "failed", "activating".
+          type: DEPENDENT
+          key: ipa.sssd.service.active
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  var state = data.ActiveState;
+                  if (state && typeof state === 'object') {
+                    return state.text || state.value || '';
+                  }
+                  return state || '';
+          master_item:
+            key: 'systemd.unit.get[sssd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: SSSD
+        - uuid: 523b81cadfeb4a9eb35224c5373ca4e1
+          name: 'SSSD service: SubState'
+          description: |
+            Extracted SubState from systemd JSON for sssd.service.
+            Expected value: "running" when healthy; other values include "dead", "failed", "start".
+          type: DEPENDENT
+          key: ipa.sssd.service.sub
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  var state = data.SubState;
+                  if (state && typeof state === 'object') {
+                    return state.text || state.value || '';
+                  }
+                  return state || '';
+          master_item:
+            key: 'systemd.unit.get[sssd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: SSSD
+        - uuid: cd40ea8338824d41ae0d1d62ada3c4a7
+          name: 'SSSD service: running'
+          description: |
+            Derived boolean: ActiveState=active AND SubState=running.
+            Expected value: 1 = running, 0 = not running.
+          type: DEPENDENT
+          key: ipa.sssd.service.running
+          delay: '0'
+          history: 90d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Service running state'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return 0; }
+                  var activeState = data.ActiveState;
+                  var subState = data.SubState;
+                  if (activeState && typeof activeState === 'object') {
+                    activeState = activeState.text || activeState.value || '';
+                  }
+                  if (subState && typeof subState === 'object') {
+                    subState = subState.text || subState.value || '';
+                  }
+                  var active = activeState === 'active';
+                  var running = subState === 'running';
+                  return (active && running) ? 1 : 0;
+          master_item:
+            key: 'systemd.unit.get[sssd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: SSSD
+          triggers:
+            - uuid: b934a5fed4534e4aabd9619510d048f6
+              expression: 'last(/FreeIPA Client/ipa.sssd.service.running)=0'
+              name: 'SSSD service is not running'
+              priority: HIGH
+              manual_close: 'YES'
+        - uuid: 9b285718451540a59f6c3e4be234d61d
+          name: 'Chronyd service: raw'
+          description: |
+            Raw systemd.unit.get output for chronyd.service.
+            Chronyd provides NTP time synchronization on the client.
+            Expected value: JSON with LoadState/ActiveState/SubState; empty means unit not found or query failed.
+          key: 'systemd.unit.get[chronyd.service]'
+          delay: 1m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+            - tag: FreeIPA
+              value: RAW
+        - uuid: f09f83aba2ab456ba2fa7ee831029c59
+          name: 'Chronyd service: loaded'
+          description: |
+            Derived boolean from LoadState of chronyd.service.
+            Expected value: 1 = loaded, 0 = not loaded (service missing or masked).
+          type: DEPENDENT
+          key: ipa.time.chronyd.loaded
+          delay: '0'
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Service loaded state'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return 0; }
+                  var state = data.LoadState;
+                  if (state && typeof state === 'object') {
+                    state = state.text || state.value || '';
+                  }
+                  return (state === 'loaded') ? 1 : 0;
+          master_item:
+            key: 'systemd.unit.get[chronyd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+        - uuid: e381dd4dfcd7432bbae3a3b52631cf3c
+          name: 'Chronyd service: running'
+          description: |
+            Derived boolean: ActiveState=active AND SubState=running for chronyd.service.
+            Expected value: 1 = running, 0 = not running.
+          type: DEPENDENT
+          key: ipa.time.chronyd.running
+          delay: '0'
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Service running state'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return 0; }
+                  var activeState = data.ActiveState;
+                  var subState = data.SubState;
+                  if (activeState && typeof activeState === 'object') {
+                    activeState = activeState.text || activeState.value || '';
+                  }
+                  if (subState && typeof subState === 'object') {
+                    subState = subState.text || subState.value || '';
+                  }
+                  var active = activeState === 'active';
+                  var running = subState === 'running';
+                  return (active && running) ? 1 : 0;
+          master_item:
+            key: 'systemd.unit.get[chronyd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+          triggers:
+            - uuid: b9791217aabf4ca3acd86c4185b67455
+              expression: 'last(/FreeIPA Client/ipa.time.chronyd.loaded)=1 and last(/FreeIPA Client/ipa.time.chronyd.running)=0'
+              name: 'Chronyd service is not running'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 267359ae39b84d8f86825abab50b24df
+          name: 'systemd-timesyncd service: raw'
+          description: |
+            Raw systemd.unit.get output for systemd-timesyncd.service.
+            systemd-timesyncd provides systemd-based time synchronization.
+            Expected value: JSON with LoadState/ActiveState/SubState; empty means unit not found or query failed.
+          key: 'systemd.unit.get[systemd-timesyncd.service]'
+          delay: 1m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+            - tag: FreeIPA
+              value: RAW
+        - uuid: e42adbf002a34d489513427c6461a030
+          name: 'systemd-timesyncd service: loaded'
+          description: |
+            Derived boolean from LoadState of systemd-timesyncd.service.
+            Expected value: 1 = loaded, 0 = not loaded (service missing or masked).
+          type: DEPENDENT
+          key: ipa.time.timesyncd.loaded
+          delay: '0'
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Service loaded state'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return 0; }
+                  var state = data.LoadState;
+                  if (state && typeof state === 'object') {
+                    state = state.text || state.value || '';
+                  }
+                  return (state === 'loaded') ? 1 : 0;
+          master_item:
+            key: 'systemd.unit.get[systemd-timesyncd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+        - uuid: 64d02a354c0841f7a4350420a1244a5b
+          name: 'systemd-timesyncd service: running'
+          description: |
+            Derived boolean: ActiveState=active AND SubState=running for systemd-timesyncd.service.
+            Expected value: 1 = running, 0 = not running.
+          type: DEPENDENT
+          key: ipa.time.timesyncd.running
+          delay: '0'
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Service running state'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return 0; }
+                  var activeState = data.ActiveState;
+                  var subState = data.SubState;
+                  if (activeState && typeof activeState === 'object') {
+                    activeState = activeState.text || activeState.value || '';
+                  }
+                  if (subState && typeof subState === 'object') {
+                    subState = subState.text || subState.value || '';
+                  }
+                  var active = activeState === 'active';
+                  var running = subState === 'running';
+                  return (active && running) ? 1 : 0;
+          master_item:
+            key: 'systemd.unit.get[systemd-timesyncd.service]'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+          triggers:
+            - uuid: 13e43cfcdd1e4d41beeb011f9d5269da
+              expression: 'last(/FreeIPA Client/ipa.time.timesyncd.loaded)=1 and last(/FreeIPA Client/ipa.time.timesyncd.running)=0'
+              name: 'systemd-timesyncd service is not running'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: ba9f2b4b5a0d4f5fbe8b8bdf2be4db9c
+          name: 'Time sync: timedatectl raw'
+          description: |
+            Reads NTP flags and timezone from timedatectl (NTPSynchronized, NTP, Timezone).
+            Expected value: lines "NTPSynchronized=yes/no", "NTP=yes/no", and "Timezone=..."; empty means timedatectl is unavailable.
+          key: ipa.time.timedatectl
+          delay: 5m
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+            - tag: FreeIPA
+              value: RAW
+        - uuid: 92d9b0e2f4b74de9a4e111276c4cf68f
+          name: 'Time sync: timezone'
+          description: |
+            Extracts timezone from timedatectl output.
+            Expected value: timezone name like "Europe/Prague"; empty means value not available.
+          type: DEPENDENT
+          key: ipa.time.timezone
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var match = value.match(/^Timezone=(.+)$/m);
+                  if (!match) return '';
+                  return match[1].trim();
+          master_item:
+            key: ipa.time.timedatectl
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+          triggers:
+            - uuid: 2f2a6f0c6f4b4a48a9f6ed4fdb7b08b6
+              expression: 'find(/FreeIPA Client/ipa.time.timezone,,"regexp","{$IPA.TIMEZONE.MATCH}")=0'
+              name: 'Timezone does not match expected value'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: f63dfd5768b84c0f89f3f5c1f9285e8c
+          name: 'Time sync: NTP service enabled'
+          description: |
+            Parses NTP flag from timedatectl.
+            Expected value: 1 = NTP service enabled, 0 = disabled or unknown.
+          type: DEPENDENT
+          key: ipa.time.ntp.service
+          delay: '0'
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Yes/No'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var match = value.match(/^NTP=(.+)$/m);
+                  if (!match) return 0;
+                  var v = match[1].trim().toLowerCase();
+                  return (v === 'yes' || v === 'true' || v === '1') ? 1 : 0;
+          master_item:
+            key: ipa.time.timedatectl
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+          triggers:
+            - uuid: 0d12e7e5f5f24cf3861e7bb1f5f10f4c
+              expression: 'last(/FreeIPA Client/ipa.time.ntp.service)=0'
+              name: 'NTP service is disabled'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 0c1da9f44bcd4bf7a5d79b6b9ea8e9b4
+          name: 'Time sync: system clock synchronized'
+          description: |
+            Parses NTPSynchronized flag from timedatectl.
+            Expected value: 1 = synchronized, 0 = not synchronized or unknown.
+          type: DEPENDENT
+          key: ipa.time.ntp.synced
+          delay: '0'
+          history: 7d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Yes/No'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var match = value.match(/^NTPSynchronized=(.+)$/m);
+                  if (!match) return 0;
+                  var v = match[1].trim().toLowerCase();
+                  return (v === 'yes' || v === 'true' || v === '1') ? 1 : 0;
+          master_item:
+            key: ipa.time.timedatectl
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: TIME
+          triggers:
+            - uuid: 7e5032b901f54f2aa21c88b6b1f43dd0
+              expression: 'last(/FreeIPA Client/ipa.time.ntp.service)=1 and last(/FreeIPA Client/ipa.time.ntp.synced)=0'
+              name: 'System clock is not synchronized'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 1aa6620a73f24d4aaf30a9746171c647
+          name: 'SSSD log errors'
+          type: ZABBIX_ACTIVE
+          key: 'logrt[/var/log/sssd/^sssd_.*\.log$,{$IPA.SSSD.LOG.ERROR},,,skip]'
+          delay: 1s
+          history: 7d
+          description: |
+            Active log check for SSSD errors in /var/log/sssd matching {$IPA.SSSD.LOG.ERROR}.
+            Expected value: log line content; empty when no matches. Requires active checks and read access.
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: SSSD
+          triggers:
+            - uuid: 8b83c03c701341a9bba12959b862186d
+              expression: 'count(/FreeIPA Client/logrt[/var/log/sssd/^sssd_.*\.log$,{$IPA.SSSD.LOG.ERROR},,,skip],{$IPA.SSSD.LOG.WINDOW})>0 and nodata(/FreeIPA Client/logrt[/var/log/sssd/^sssd_.*\.log$,{$IPA.SSSD.LOG.ERROR},,,skip],{$IPA.SSSD.LOG.WINDOW})=0'
+              name: 'SSSD errors detected in logs'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 3d03b986e51f4deca593e8f14e01323b
+          name: 'IPA CA certificate: notAfter raw'
+          description: |
+            Reads notAfter from /etc/ipa/ca.crt using openssl via userparameter.
+            Expected value: string "notAfter=..." or empty on failure.
+          key: ipa.ca.notafter
+          delay: 1h
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: 'CA Cert'
+            - tag: FreeIPA
+              value: RAW
+        - uuid: 170bacd517a34b0e85a708ed9c9cae26
+          name: 'IPA CA certificate: expiration time'
+          description: |
+            Parses notAfter into Unix time (seconds since epoch).
+            Expected value: unix timestamp; 0 means parse failed or source empty.
+          type: DEPENDENT
+          key: ipa.ca.cert.expire
+          delay: '0'
+          history: 90d
+          units: unixtime
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'notAfter=(.+)'
+                - '\1'
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var v = value.trim();
+                  var m = v.match(/^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})(?:\s+(GMT|UTC))?$/);
+                  if (m) {
+                    var months = {
+                      Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+                      Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+                    };
+                    var mi = months[m[1]];
+                    if (mi === undefined) return 0;
+                    var dd = parseInt(m[2], 10);
+                    var hh = parseInt(m[3], 10);
+                    var mm = parseInt(m[4], 10);
+                    var ss = parseInt(m[5], 10);
+                    var yyyy = parseInt(m[6], 10);
+                    var t = Date.UTC(yyyy, mi, dd, hh, mm, ss);
+                    return Math.floor(t / 1000);
+                  }
+                  var t = Date.parse(v.replace('GMT', 'UTC'));
+                  if (isNaN(t)) return 0;
+                  return Math.floor(t / 1000);
+          master_item:
+            key: ipa.ca.notafter
+          tags:
+            - tag: FreeIPA
+              value: Client
+            - tag: FreeIPA
+              value: 'CA Cert'
+          triggers:
+            - uuid: d342c17637a547aeb14e79cb25d1252c
+              expression: '(last(/FreeIPA Client/ipa.ca.cert.expire) - now()) < {$IPA.CERT.EXPIRE.WARN}'
+              name: 'IPA CA certificate expires soon'
+              priority: WARNING
+              manual_close: 'YES'
+      discovery_rules:
+        - uuid: 12cd423fe8d24fdb80c6c61d1d4ac504
+          name: 'IPA packages discovery'
+          type: DEPENDENT
+          key: ipa.packages.discovery
+          delay: '0'
+          lifetime: 30d
+          item_prototypes:
+            - uuid: 7149e2d480684a4bb54b126d3f3bf422
+              name: 'Package {#PKG.NAME}: version'
+              description: |
+                Extracts version for {#PKG.NAME} from system.sw.packages.get.
+                Expected value: version string; empty means package not present in the JSON.
+              type: DEPENDENT
+              key: 'ipa.package.version[{#PKG.NAME}]'
+              delay: '0'
+              history: 90d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data;
+                      try { data = JSON.parse(value); } catch (e) { return ''; }
+                      if (!Array.isArray(data)) return '';
+                      for (var i = 0; i < data.length; i++) {
+                        if (data[i].name === '{#PKG.NAME}') {
+                          return data[i].version || '';
+                        }
+                      }
+                      return '';
+              master_item:
+                key: 'system.sw.packages.get[{$IPA.PACKAGES.MATCH}]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: Version
+              trigger_prototypes:
+                - uuid: 71fe1673594e4b3bb7c9610a6ec8c454
+                  expression: 'change(/FreeIPA Client/ipa.package.version[{#PKG.NAME}])<>0'
+                  name: 'Package {#PKG.NAME} version changed'
+                  priority: INFO
+                  manual_close: 'YES'
+                - uuid: 8fccc9a039a4487295e5d68cde88b0f1
+                  expression: 'find(/FreeIPA Client/ipa.package.version[{#PKG.NAME}],,"regexp","{$IPA.PKG.VERSION.MATCH}")=0'
+                  name: 'Package {#PKG.NAME} version is not in approved list'
+                  priority: WARNING
+                  manual_close: 'YES'
+            - uuid: d4f95ee60a5748728a7efc9e7b20aa23
+              name: 'Package {#PKG.NAME}: manager'
+              description: |
+                Extracts package manager for {#PKG.NAME} from system.sw.packages.get.
+                Expected value: manager string (rpm, dpkg, apk, ...); empty means value not available.
+              type: DEPENDENT
+              key: 'ipa.package.manager[{#PKG.NAME}]'
+              delay: '0'
+              discover: NO_DISCOVER
+              history: 90d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data;
+                      try { data = JSON.parse(value); } catch (e) { return ''; }
+                      if (!Array.isArray(data)) return '';
+                      for (var i = 0; i < data.length; i++) {
+                        if (data[i].name === '{#PKG.NAME}') {
+                          return data[i].manager || '';
+                        }
+                      }
+                      return '';
+              master_item:
+                key: 'system.sw.packages.get[{$IPA.PACKAGES.MATCH}]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: Version
+            - uuid: 566ddf48768048aa99e9db88bb7879a7
+              name: 'Package {#PKG.NAME}: arch'
+              description: |
+                Extracts package architecture for {#PKG.NAME} from system.sw.packages.get.
+                Expected value: arch string (x86_64, aarch64, ...); empty means value not available.
+              type: DEPENDENT
+              key: 'ipa.package.arch[{#PKG.NAME}]'
+              delay: '0'
+              discover: NO_DISCOVER
+              history: 90d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data;
+                      try { data = JSON.parse(value); } catch (e) { return ''; }
+                      if (!Array.isArray(data)) return '';
+                      for (var i = 0; i < data.length; i++) {
+                        if (data[i].name === '{#PKG.NAME}') {
+                          return data[i].arch || '';
+                        }
+                      }
+                      return '';
+              master_item:
+                key: 'system.sw.packages.get[{$IPA.PACKAGES.MATCH}]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: Version
+            - uuid: a5a826ee15094a0194b50fcfd62a08ab
+              name: 'Package {#PKG.NAME}: install time'
+              description: |
+                Extracts install time for {#PKG.NAME} from system.sw.packages.get.
+                Expected value: installtime.value (epoch or manager-specific format); empty means value not available.
+              type: DEPENDENT
+              key: 'ipa.package.install.time[{#PKG.NAME}]'
+              delay: '0'
+              discover: NO_DISCOVER
+              history: 90d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data;
+                      try { data = JSON.parse(value); } catch (e) { return ''; }
+                      if (!Array.isArray(data)) return '';
+                      for (var i = 0; i < data.length; i++) {
+                        if (data[i].name === '{#PKG.NAME}') {
+                          return (data[i].installtime && data[i].installtime.value) ? data[i].installtime.value : '';
+                        }
+                      }
+                      return '';
+              master_item:
+                key: 'system.sw.packages.get[{$IPA.PACKAGES.MATCH}]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: Version
+          master_item:
+            key: 'system.sw.packages.get[{$IPA.PACKAGES.MATCH}]'
+          lld_macro_paths:
+            - lld_macro: '{#PKG.NAME}'
+              path: $.name
+            - lld_macro: '{#PKG.VERSION}'
+              path: $.version
+            - lld_macro: '{#PKG.ARCH}'
+              path: $.arch
+            - lld_macro: '{#PKG.MANAGER}'
+              path: $.manager
+            - lld_macro: '{#PKG.INSTALL.TIME}'
+              path: $.installtime.value
+        - uuid: 2b39f79a6f6a4b7b9b3e9a7d3a0b2b6d
+          name: 'IPA DNS servers discovery'
+          description: |
+            Discovers DNS servers from /etc/resolv.conf (nameserver lines).
+            Expected value: LLD JSON with {#DNS.SERVER} entries.
+          type: DEPENDENT
+          key: ipa.dns.servers.discovery
+          delay: '0'
+          lifetime: 30d
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var out = { data: [] };
+                  var parts = value.trim().split(/\s+/);
+                  for (var i = 0; i < parts.length; i++) {
+                    var s = parts[i].trim();
+                    if (!s) continue;
+                    out.data.push({ "{#DNS.SERVER}": s });
+                  }
+                  return JSON.stringify(out);
+          master_item:
+            key: ipa.dns.resolv.servers
+          item_prototypes:
+            - uuid: 8f4a9f4bb16a4a5a8f4a9f4bb16a4a5a
+              name: 'DNS server {#DNS.SERVER}: SRV _ldap record'
+              description: |
+                SRV lookup for _ldap._tcp.{$IPA.DNS.SRV.DOMAIN} using the specific resolver.
+                Expected value: DNS response string containing 'SRV'; empty or missing 'SRV' means record not found.
+              key: 'net.dns.record[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+              delay: 5m
+              history: 7d
+              trends: '0'
+              value_type: TEXT
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+                - tag: FreeIPA
+                  value: RAW
+              trigger_prototypes:
+                - uuid: b7a2db9b1f3d45b9a4a2d7a02e2f3db1
+                  expression: 'count(/FreeIPA Client/net.dns.record[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],#1)=1 and (find(/FreeIPA Client/net.dns.record[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],,"regexp","\\sSRV\\s")=0 or nodata(/FreeIPA Client/net.dns.record[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],{$IPA.DNS.NODATA.WINDOW})=1)'
+                  name: 'DNS server {#DNS.SERVER} missing SRV _ldap record'
+                  priority: HIGH
+                  manual_close: 'YES'
+            - uuid: 1b3fcae0a8c54c42b3fcae0a8c54c42b
+              name: 'DNS server {#DNS.SERVER}: SRV _ldap response time'
+              description: |
+                Measures SRV lookup response time on the specific resolver.
+                Expected value: response time in seconds; 0 means query failed or DNS down.
+              key: 'net.dns.perf[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+              delay: 1m
+              history: 7d
+              value_type: FLOAT
+              units: s
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+              trigger_prototypes:
+                - uuid: aa9b24616f5a487d88c03c0e0ba22697
+                  expression: 'last(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV])=0'
+                  name: 'DNS server {#DNS.SERVER} SRV query failed'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: 916458af6a2749c484ca692d730c69af
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],5m)>{$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'DNS server {#DNS.SERVER} SRV response time is high (critical)'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: e4a87cb351d84cd28edb83a97232d965
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],5m)>{$IPA.DNS.RESP.TIME.WARN} and avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],5m)<={$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'DNS server {#DNS.SERVER} SRV response time is high (warning)'
+                  priority: WARNING
+                  manual_close: 'YES'
+            - uuid: 7a27e0bf30d942f1877b89b5b8a83e75
+              name: 'DNS server {#DNS.SERVER}: SRV _ldap normalized targets'
+              description: |
+                Normalized list of SRV targets from the specific resolver.
+                Expected value: space-separated list of "target:port" pairs.
+              type: DEPENDENT
+              key: 'ipa.dns.srv.ldap.normalized[{#DNS.SERVER}]'
+              delay: '0'
+              history: 7d
+              value_type: TEXT
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var out = [];
+                      var lines = value.split('\n');
+                      for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i].trim();
+                        if (!line) continue;
+                        var parts = line.split(/\s+/);
+                        var idx = parts.indexOf('SRV');
+                        if (idx === -1 || parts.length < idx + 5) continue;
+                        var port = parts[idx + 3];
+                        var target = parts[idx + 4];
+                        if (!target) continue;
+                        target = target.replace(/\.$/, '');
+                        out.push(target + ':' + port);
+                      }
+                      out.sort();
+                      return out.join(' ');
+              master_item:
+                key: 'net.dns.record[{#DNS.SERVER},_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+              trigger_prototypes:
+                - uuid: d23ea162b072489889895ccb02fcb737
+                  expression: 'find(/FreeIPA Client/ipa.dns.srv.ldap.normalized[{#DNS.SERVER}],,"regexp",".+")=1 and find(/FreeIPA Client/ipa.dns.srv.ldap.normalized.local,,"regexp",".+")=1 and last(/FreeIPA Client/ipa.dns.srv.ldap.normalized[{#DNS.SERVER}])<>last(/FreeIPA Client/ipa.dns.srv.ldap.normalized.local)'
+                  name: 'DNS server {#DNS.SERVER} SRV targets differ from local resolver'
+                  priority: WARNING
+                  manual_close: 'YES'
+            - uuid: 32ea680c49ec46059c1c44e0a1ab72fc
+              name: 'DNS server {#DNS.SERVER}: SRV _kerberos record'
+              description: |
+                SRV lookup for _kerberos._tcp.{$IPA.DNS.SRV.DOMAIN} using the specific resolver.
+                Expected value: DNS response string containing 'SRV'; empty or missing 'SRV' means record not found.
+              key: 'net.dns.record[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+              delay: 5m
+              history: 7d
+              trends: '0'
+              value_type: TEXT
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+                - tag: FreeIPA
+                  value: RAW
+              trigger_prototypes:
+                - uuid: a9e329a59e3a45a3a2589b728da58571
+                  expression: 'count(/FreeIPA Client/net.dns.record[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],#1)=1 and (find(/FreeIPA Client/net.dns.record[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],,"regexp","\\sSRV\\s")=0 or nodata(/FreeIPA Client/net.dns.record[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],{$IPA.DNS.NODATA.WINDOW})=1)'
+                  name: 'DNS server {#DNS.SERVER} missing SRV _kerberos record'
+                  priority: HIGH
+                  manual_close: 'YES'
+            - uuid: 64799273eb9e442ea634a6d04b77d365
+              name: 'DNS server {#DNS.SERVER}: SRV _kerberos response time'
+              description: |
+                Measures SRV lookup response time on the specific resolver.
+                Expected value: response time in seconds; 0 means query failed or DNS down.
+              key: 'net.dns.perf[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+              delay: 1m
+              history: 7d
+              value_type: FLOAT
+              units: s
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+              trigger_prototypes:
+                - uuid: 3a87c4c31fb54d1bb35a0c72e85689a8
+                  expression: 'last(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV])=0'
+                  name: 'DNS server {#DNS.SERVER} SRV _kerberos query failed'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: 822c14105fe24b9abcc9fc02d1917e46
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],5m)>{$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'DNS server {#DNS.SERVER} SRV _kerberos response time is high (critical)'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: 1117bfe4d3614e54aca0ca4f7e8ba366
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],5m)>{$IPA.DNS.RESP.TIME.WARN} and avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV],5m)<={$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'DNS server {#DNS.SERVER} SRV _kerberos response time is high (warning)'
+                  priority: WARNING
+                  manual_close: 'YES'
+            - uuid: 593fc507106b45cdae055fcd6d8fdb8f
+              name: 'DNS server {#DNS.SERVER}: SRV _kerberos normalized targets'
+              description: |
+                Normalized list of SRV targets from the specific resolver.
+                Expected value: space-separated list of "target:port" pairs.
+              type: DEPENDENT
+              key: 'ipa.dns.srv.kerberos.normalized[{#DNS.SERVER}]'
+              delay: '0'
+              history: 7d
+              value_type: TEXT
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var out = [];
+                      var lines = value.split('\\n');
+                      for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i].trim();
+                        if (!line) continue;
+                        var parts = line.split(/\\s+/);
+                        var idx = parts.indexOf('SRV');
+                        if (idx === -1 || parts.length < idx + 5) continue;
+                        var port = parts[idx + 3];
+                        var target = parts[idx + 4];
+                        if (!target) continue;
+                        target = target.replace(/\\.$/, '');
+                        out.push(target + ':' + port);
+                      }
+                      out.sort();
+                      return out.join(' ');
+              master_item:
+                key: 'net.dns.record[{#DNS.SERVER},_kerberos._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+              trigger_prototypes:
+                - uuid: 26cba12c2b084f90b3baf60523370f5e
+                  expression: 'find(/FreeIPA Client/ipa.dns.srv.kerberos.normalized[{#DNS.SERVER}],,"regexp",".+")=1 and find(/FreeIPA Client/ipa.dns.srv.kerberos.normalized.local,,"regexp",".+")=1 and last(/FreeIPA Client/ipa.dns.srv.kerberos.normalized[{#DNS.SERVER}])<>last(/FreeIPA Client/ipa.dns.srv.kerberos.normalized.local)'
+                  name: 'DNS server {#DNS.SERVER} SRV _kerberos targets differ from local resolver'
+                  priority: WARNING
+                  manual_close: 'YES'
+            - uuid: 0de45ab9b8dd44c3b7c75655bd323e73
+              name: 'DNS server {#DNS.SERVER}: A record for {$IPA.DNS.TEST.NAME}'
+              description: |
+                Queries A record for {$IPA.DNS.TEST.NAME} using the specific resolver.
+                Expected value: DNS response with A records; empty means no record or resolver error.
+              key: 'net.dns.record[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A]'
+              delay: 5m
+              history: 7d
+              trends: '0'
+              value_type: TEXT
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: RAW
+              trigger_prototypes:
+                - uuid: 44d4f2a9115043c9bc3a0cefab444df1
+                  expression: 'find(/FreeIPA Client/net.dns.record[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A],,"regexp","\\sA\\s")=0'
+                  name: 'DNS server {#DNS.SERVER} missing A record for {$IPA.DNS.TEST.NAME}'
+                  priority: HIGH
+                  manual_close: 'YES'
+            - uuid: af91d9e243254e88bbaf6ce4c36cd28c
+              name: 'DNS server {#DNS.SERVER}: A response time for {$IPA.DNS.TEST.NAME}'
+              description: |
+                Measures A record lookup response time on the specific resolver.
+                Expected value: response time in seconds; 0 means query failed or DNS down.
+              key: 'net.dns.perf[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A]'
+              delay: 1m
+              history: 7d
+              value_type: FLOAT
+              units: s
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+              trigger_prototypes:
+                - uuid: 9f57052d8a494b51a6c5d58db2294858
+                  expression: 'last(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A])=0'
+                  name: 'DNS server {#DNS.SERVER} A query failed for {$IPA.DNS.TEST.NAME}'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: d2aa3abefc894e468e7a52fc4d5e9a2e
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A],5m)>{$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'DNS server {#DNS.SERVER} A response time is high (critical)'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: f38c3953db3a4ea5b6ce28f0d5343491
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A],5m)>{$IPA.DNS.RESP.TIME.WARN} and avg(/FreeIPA Client/net.dns.perf[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A],5m)<={$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'DNS server {#DNS.SERVER} A response time is high (warning)'
+                  priority: WARNING
+                  manual_close: 'YES'
+            - uuid: ebb57338d1704840a8d218d56786778a
+              name: 'DNS server {#DNS.SERVER}: A record normalized'
+              description: |
+                Normalized list of A record IPs for {$IPA.DNS.TEST.NAME} from the specific resolver.
+                Expected value: space-separated list of IPs; empty means no A records found.
+              type: DEPENDENT
+              key: 'ipa.dns.test.a.normalized[{#DNS.SERVER}]'
+              delay: '0'
+              history: 7d
+              value_type: TEXT
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var ips = value.match(/\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b/g);
+                      if (!ips) return '';
+                      var seen = {};
+                      var out = [];
+                      for (var i = 0; i < ips.length; i++) {
+                        if (seen[ips[i]]) continue;
+                        seen[ips[i]] = true;
+                        out.push(ips[i]);
+                      }
+                      out.sort();
+                      return out.join(' ');
+              master_item:
+                key: 'net.dns.record[{#DNS.SERVER},{$IPA.DNS.TEST.NAME},A]'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+              trigger_prototypes:
+                - uuid: 731c3b2b9ed447df9f6e0d066a8b3f77
+                  expression: 'find(/FreeIPA Client/ipa.dns.test.a.normalized[{#DNS.SERVER}],,"regexp",".+")=1 and find(/FreeIPA Client/ipa.dns.test.a.normalized.local,,"regexp",".+")=1 and last(/FreeIPA Client/ipa.dns.test.a.normalized[{#DNS.SERVER}])<>last(/FreeIPA Client/ipa.dns.test.a.normalized.local)'
+                  name: 'DNS server {#DNS.SERVER} A record differs from local resolver'
+                  priority: WARNING
+                  manual_close: 'YES'
+        - uuid: 6a6c7f8c0e8f45c6890a2b447b1d1f62
+          name: 'IPA SRV targets discovery'
+          description: |
+            Discovers SRV targets and ports from _ldap._tcp.{$IPA.DNS.SRV.DOMAIN}.
+            Expected value: LLD JSON with {#SRV.TARGET} and {#SRV.PORT} extracted from SRV records.
+          type: DEPENDENT
+          key: ipa.srv.discovery
+          delay: '0'
+          lifetime: 30d
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var out = { data: [] };
+                  if (!value) return JSON.stringify(out);
+                  var lines = value.split('\n');
+                  for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line) continue;
+                    var parts = line.split(/\s+/);
+                    var idx = parts.indexOf('SRV');
+                    if (idx === -1 || parts.length < idx + 5) continue;
+                    var priority = parts[idx + 1];
+                    var weight = parts[idx + 2];
+                    var port = parts[idx + 3];
+                    var target = parts[idx + 4];
+                    if (!target) continue;
+                    target = target.replace(/\.$/, '');
+                    out.data.push({
+                      "{#SRV.TARGET}": target,
+                      "{#SRV.PORT}": port,
+                      "{#SRV.PRIORITY}": priority,
+                      "{#SRV.WEIGHT}": weight
+                    });
+                  }
+                  return JSON.stringify(out);
+          master_item:
+            key: 'net.dns.record[,_ldap._tcp.{$IPA.DNS.SRV.DOMAIN},SRV]'
+          item_prototypes:
+            - uuid: c5b8f8d33c2e4d94b6a49e97c989b686
+              name: 'IPA SRV target {#SRV.TARGET}:{#SRV.PORT} TCP'
+              description: |
+                Simple TCP connectivity check for the SRV target and port discovered via DNS.
+                Expected value: 1 = reachable, 0 = connection failed.
+              key: 'net.tcp.service[tcp,{#SRV.TARGET},{#SRV.PORT}]'
+              delay: 1m
+              history: 7d
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Service status'
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+            - uuid: 3a1d4057eede4b63b2b0f4a69d4db7c1
+              name: 'IPA SRV target {#SRV.TARGET}: A record'
+              description: |
+                Resolves A record for the SRV target.
+                Expected value: DNS response with IP addresses; empty means no A record.
+              key: 'net.dns.record[,{#SRV.TARGET},A]'
+              delay: 5m
+              history: 7d
+              trends: '0'
+              value_type: TEXT
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+              trigger_prototypes:
+                - uuid: 5ed9f1a67af24849b303476c8177c4cc
+                  expression: 'find(/FreeIPA Client/net.dns.record[,{#SRV.TARGET},A],,"regexp","\\sA\\s")=0'
+                  name: 'SRV target {#SRV.TARGET} has no A record'
+                  priority: HIGH
+                  manual_close: 'YES'
+            - uuid: e5ed0c1f3dbf4c4d9bd19af6f2b2f3d0
+              name: 'IPA SRV target {#SRV.TARGET}: DNS response time'
+              description: |
+                Measures DNS response time for the SRV target (A query) using the local resolver.
+                Expected value: response time in seconds; 0 means query failed or DNS down.
+              key: 'net.dns.perf[,{#SRV.TARGET},A]'
+              delay: 1m
+              history: 7d
+              value_type: FLOAT
+              units: s
+              tags:
+                - tag: FreeIPA
+                  value: Client
+                - tag: FreeIPA
+                  value: DNS
+                - tag: FreeIPA
+                  value: SRV
+              trigger_prototypes:
+                - uuid: 3b1f0c5bb8ef47d2a0f53d88b0b3f251
+                  expression: 'last(/FreeIPA Client/net.dns.perf[,{#SRV.TARGET},A])=0'
+                  name: 'SRV target {#SRV.TARGET} DNS query failed'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: 9b2f1a3e4a5d4b4e9b2f1a3e4a5d4b4e
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[,{#SRV.TARGET},A],5m)>{$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'SRV target {#SRV.TARGET} DNS response time is high (critical)'
+                  priority: HIGH
+                  manual_close: 'YES'
+                - uuid: 8c1d2e3f4a5b4c5d8c1d2e3f4a5b4c5d
+                  expression: 'avg(/FreeIPA Client/net.dns.perf[,{#SRV.TARGET},A],5m)>{$IPA.DNS.RESP.TIME.WARN} and avg(/FreeIPA Client/net.dns.perf[,{#SRV.TARGET},A],5m)<={$IPA.DNS.RESP.TIME.CRIT}'
+                  name: 'SRV target {#SRV.TARGET} DNS response time is high (warning)'
+                  priority: WARNING
+                  manual_close: 'YES'
+      macros:
+        - macro: '{$IPA.DNS.SERVERS.MATCH}'
+          value: 'IP_DNS_IPA1|IP_DNS_IPA2'
+          description: 'MANDATORY. Regex of expected DNS servers from /etc/resolv.conf (nameserver lines). Full match is used; use IPs like IP_DNS_IPA1|IP_DNS_IPA2.'
+        - macro: '{$IPA.DNS.SEARCH.MATCH}'
+          value: example.com
+          description: 'MANDATORY. Regex of expected search/domain from /etc/resolv.conf.'
+        - macro: '{$IPA.DNS.SRV.DOMAIN}'
+          value: example.com
+          description: 'MANDATORY. Domain suffix for SRV lookups, typically your IPA realm domain.'
+        - macro: '{$IPA.DNS.TEST.NAME}'
+          value: ipa01.example.com
+          description: 'MANDATORY. FQDN queried by net.dns.perf for response time.'
+        - macro: '{$IPA.DNS.NODATA.WINDOW}'
+          value: 15m
+          description: 'Time window for DNS nodata triggers.'
+        - macro: '{$IPA.PKG.VERSION.MATCH}'
+          value: 'version1|version2'
+          description: 'MANDATORY. Regex of approved package versions (applies to all discovered packages). Trigger requires a non-empty value. Example: 2.11.1-2.0.1.el10_1.1|0.34.7-14.el10|1.21.3-8.0.1.el10_0|4.12.2-24.0.1.el10_1.1'
+        - macro: '{$IPA.KINIT.REALM}'
+          value: EXAMPLE.COM
+          description: 'MANDATORY. Kerberos realm appended as @REALM for keytab test.'
+        - macro: '{$IPA.SSH.USER}'
+          value: ''
+          description: 'MANDATORY. SSH username for login test (SSH agent check).'
+        - macro: '{$IPA.SSH.PASS}'
+          value: ''
+          description: 'MANDATORY. SSH password for login test (SSH agent check).'
+        - macro: '{$IPA.SSH.HOME.FILE}'
+          value: '.ZABBIX'
+          description: 'Marker file in user home directory to verify home availability.'
+        - macro: '{$IPA.SSH.NODATA.WINDOW}'
+          value: 20m
+          description: 'Time window for SSH nodata trigger.'
+        - macro: '{$IPA.PACKAGES.MATCH}'
+          value: 'ipa-client|sssd|krb5|oddjob-mkhomedir'
+          description: 'Regex filter for package discovery.'
+        - macro: '{$IPA.CERT.EXPIRE.WARN}'
+          value: 7d
+          description: 'Warning threshold for IPA CA cert expiry (time left).'
+        - macro: '{$IPA.DNS.RESP.TIME.WARN}'
+          value: 0.2s
+          description: 'Warning threshold for DNS response time (seconds).'
+        - macro: '{$IPA.DNS.RESP.TIME.CRIT}'
+          value: 0.5s
+          description: 'Critical threshold for DNS response time (seconds).'
+        - macro: '{$IPA.SSSD.LOG.ERROR}'
+          value: 'ERROR|Offline|Failed'
+          description: 'Regex of SSSD log error patterns.'
+        - macro: '{$IPA.SSSD.LOG.WINDOW}'
+          value: 5m
+          description: 'Time window for log error trigger evaluation.'
+        - macro: '{$IPA.TIMEZONE.MATCH}'
+          value: Europe/Prague
+          description: 'Regex of expected timezone from timedatectl (leave empty to disable timezone check).'
+      valuemaps:
+        - uuid: 1122c1cacefb42fd9c610e10abdc4a74
+          name: 'Service running state'
+          mappings:
+            - value: '1'
+              newvalue: Running
+            - value: '0'
+              newvalue: 'Not running'
+        - uuid: bb3b6029bbe5468898a679e8bef5b077
+          name: 'Service loaded state'
+          mappings:
+            - value: '1'
+              newvalue: Loaded
+            - value: '0'
+              newvalue: 'Not loaded'
+        - uuid: a8fca5a132c24b0ea123e905bd0a7eb2
+          name: 'Yes/No'
+          mappings:
+            - value: '1'
+              newvalue: 'Yes'
+            - value: '0'
+              newvalue: 'No'
+        - uuid: ea2fe116ff544cc7823357378df06205
+          name: 'Kerberos keytab test'
+          mappings:
+            - value: '1'
+              newvalue: OK
+            - value: '0'
+              newvalue: FAIL
+        - uuid: 461bb03288ea40beb8a546f51f82ea6f
+          name: 'Kerberos keytab file'
+          mappings:
+            - value: '1'
+              newvalue: Present
+            - value: '0'
+              newvalue: Missing
+        - uuid: 4e3f0d5a6b7c4e2b9f1a3c5d6e7f8a90
+          name: 'Service status'
+          mappings:
+            - value: '1'
+              newvalue: Up
+            - value: '0'
+              newvalue: Down
+        - uuid: 7a8b9c0d1e2f4a3b8c9d0e1f2a3b4c5d
+          name: 'SSH login & home status'
+          mappings:
+            - value: '1'
+              newvalue: OK
+            - value: '2'
+              newvalue: 'Home missing'

@@ -1,0 +1,458 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: e6b6018c6e0d42ac9f1835cd383f88dc
+      template: 'Template DB Firebird'
+      name: 'Template DB Firebird'
+      description: |
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      discovery_rules:
+        - uuid: 262ae947594e414583d7524fb6aa4f3f
+          name: 'FirebirdDB Discovery'
+          key: 'firebird.discovery[{$FIREBIRD.LLD.PATH}]'
+          delay: 1h
+          filter:
+            conditions:
+              - macro: '{#FIREBIRD.DB.NAME}'
+                value: '{$FIREBIRD.DB.MATCHES}'
+                formulaid: A
+              - macro: '{#FIREBIRD.DB.NAME}'
+                value: '{$FIREBIRD.DB.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+          item_prototypes:
+            - uuid: 3d0a96fbcd734cc8aabd853ed48c9f84
+              name: 'Connections active on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},attach_active]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: connections
+            - uuid: 552fb92e6639458990e701d5d15c511a
+              name: 'Connections idle on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},attach_idle]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: connections
+            - uuid: c3e6e0fe318544b6ad0e6c22a9202d02
+              name: 'Cache hit ratio on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},cache_hit_ratio]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: performance
+              trigger_prototypes:
+                - uuid: 00d4500fac024ff38711d475feed0649
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},cache_hit_ratio])<{$FB_CACHE_HIT_MIN}'
+                  name: 'Cache hit ratio below 90% on {#FIREBIRD.DB.NAME}'
+                  priority: WARNING
+            - uuid: fb48c88b2cb140cfa2ffbf03a6a0f984
+              name: 'Encryption state on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},crypt_state]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: security
+              trigger_prototypes:
+                - uuid: b38343a32306401db4b0d95f59654cca
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},crypt_state])>{$FB_CRYPT_STATE_ALERT}'
+                  name: 'Database encryption/decryption in progress on {#FIREBIRD.DB.NAME}'
+                  priority: INFO
+            - uuid: 2528dcca459442e38d9304527920345e
+              name: 'Database backup state on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_backup]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: database
+              trigger_prototypes:
+                - uuid: ad702838dd24425ab0a0c64add3f6bed
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_backup])<>0'
+                  name: 'Firebird database {#FIREBIRD.DB.NAME} backup failed'
+                  priority: HIGH
+            - uuid: 1e736812c409480bae526f2678665882
+              name: 'Database read-only on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_readonly]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: database
+              trigger_prototypes:
+                - uuid: 0b1bfa12be044c8e9f2494df6e2153ab
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_readonly])<>0'
+                  name: 'Firebird database {#FIREBIRD.DB.NAME} is read-only!'
+                  priority: DISASTER
+            - uuid: 7752b37df3d44411882f58254fbfb10a
+              name: 'Database status on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_status]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: database
+              trigger_prototypes:
+                - uuid: 778f3fd793b545be84e0d3dffe852701
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_status])<>0'
+                  name: 'Firebird database {#FIREBIRD.DB.NAME} is down!'
+                  priority: DISASTER
+            - uuid: 6838219eb9c44e4c83788b6b558e26f4
+              name: 'Database size bytes on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},db_size_bytes]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: size
+            - uuid: 7278800fe36e452a89e334e8f8cb6e46
+              name: 'Forced writes flag on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},forced_writes]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: settings
+              trigger_prototypes:
+                - uuid: e572128bb41a4def86262f1bbdca77e2
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},forced_writes])={$FB_FORCED_WRITES_DISABLED}'
+                  name: 'Forced Writes disabled on {#FIREBIRD.DB.NAME}'
+                  priority: HIGH
+            - uuid: b294013b394e412d8448ca74dc38d05a
+              name: 'Page fetches on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_fetches]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: performance
+            - uuid: 95af49a83497484587d6526e15c3d7a1
+              name: 'Page marks on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_marks]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: performance
+            - uuid: 0403be8cbe3c4950a74b07ab60aae901
+              name: 'Page reads on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_reads]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: performance
+            - uuid: 208f057e8668454b984051dfe15a815d
+              name: 'Page writes on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_writes]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: performance
+            - uuid: 46aeda0a134848ea939913efa56f9f29
+              name: 'Lock conflicts on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},lock_conflicts]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: locks
+              trigger_prototypes:
+                - uuid: 135ca9a72f7e42bfb20812fde184908c
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},lock_conflicts])>{$FB_LOCK_CONFLICTS_MAX}'
+                  name: 'Lock conflicts detected on {#FIREBIRD.DB.NAME}'
+                  priority: WARNING
+            - uuid: b85a55c598414e888145513380c83b46
+              name: 'Memory allocated on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},memory_alloc]'
+              history: 7d
+              units: bytes
+              tags:
+                - tag: Firebird
+                  value: memory
+            - uuid: e35a856b482f41ec9b12d820a1ccd0bf
+              name: 'Memory usage on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},memory_usage]'
+              history: 7d
+              units: bytes
+              tags:
+                - tag: Firebird
+                  value: memory
+            - uuid: cbf0e16318f44c6ab3ab3afedd096ab8
+              name: 'Pages allocated on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},pages_alloc]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: size
+            - uuid: c236b976e51b419fb3416ad5bbad5761
+              name: 'Statements active on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},query_active]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: statements
+            - uuid: e1975b61d85e4ca6aa14d5169f31c5f4
+              name: 'Statements idle on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},query_idle]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: statements
+            - uuid: 0fd6c85eca7247a09fe009e029d546ee
+              name: 'Statements stalled on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},query_stalled]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: statements
+            - uuid: 079de15b7d7c4eb8938dc6d2fd229750
+              name: 'Records using indexed reads on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},record_indexes]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: records
+            - uuid: 314dc287e29e440b800cb11d55cf67af
+              name: 'Records using sequential reads {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},record_sequences]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: records
+            - uuid: 1bc827b836cc402890e3550a058e8a98
+              name: 'Replica mode on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},replica_mode]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: replication
+              trigger_prototypes:
+                - uuid: d6e64cb632184fd894a94d972810b962
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},replica_mode])={$FB_REPLICA_MODE_ALERT}'
+                  name: 'Database is read‑only replica on {#FIREBIRD.DB.NAME}'
+                  priority: INFO
+            - uuid: 997085102c754dccad0919cb4f1ffb62
+              name: 'Reserve space flag on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},reserve_space]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: settings
+              trigger_prototypes:
+                - uuid: d6cbaba691164e2fa53bc87b38cbcb07
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},reserve_space])={$FB_RESERVE_SPACE_DISABLED}'
+                  name: 'Reserve Space disabled on {#FIREBIRD.DB.NAME}'
+                  priority: WARNING
+            - uuid: b0a42b71536241efb5755b81de489517
+              name: 'Sweep active state on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},sweep_active]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: sweep
+              trigger_prototypes:
+                - uuid: cea046c5c8b846d589c0c7ba40220956
+                  expression: 'min(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},sweep_active],{$FB_SWEEP_ACTIVE_SEC})=1'
+                  name: "Sweep running for over 10\_minutes on {#FIREBIRD.DB.NAME}"
+                  priority: INFO
+            - uuid: 06b50b28cf2148358592a307daed6288
+              name: 'Sweep interval on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},sweep_interval]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: sweep
+            - uuid: 7da360a86d554241923d48a45affd7b7
+              name: 'Transactions active on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},trans_active]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: transactions
+            - uuid: 34a1bcd78364477a9cf2c842ebbb1d15
+              name: 'Transacitons idle on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},trans_idle]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: transactions
+            - uuid: 28ab24127d534aa98f8af6bd0e3399f0
+              name: 'Long running transactions on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},trans_long_running]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: transactions
+              trigger_prototypes:
+                - uuid: d159d3dfa1114f0580ac6478ffd35594
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},trans_long_running])>{$FB_LONG_TXN_COUNT_MAX}'
+                  name: 'Long‑running transactions present on {#FIREBIRD.DB.NAME}'
+                  priority: WARNING
+            - uuid: 3cb662411a384b618252af2b3461aeaf
+              name: 'Transaction gap on {#FIREBIRD.DB.NAME}'
+              key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},txn_gap]'
+              history: 7d
+              tags:
+                - tag: Firebird
+                  value: transactions
+              trigger_prototypes:
+                - uuid: 617a930dedf94b9aa648c132fe2def45
+                  expression: 'last(/Template DB Firebird/fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},txn_gap])>{$FB_TXN_GAP_MAX}'
+                  name: 'Transaction gap too high on {#FIREBIRD.DB.NAME}'
+                  priority: HIGH
+          graph_prototypes:
+            - uuid: 8f6084fbc26b4413a92f35f01aa46135
+              name: 'Firebird: connections on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},attach_active]'
+                - sortorder: '1'
+                  color: F63100
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},attach_idle]'
+            - uuid: eff4bedfd00b4d9e8812d7c54efa0a0a
+              name: 'Firebird: database backup state of {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_backup]'
+            - uuid: 86c0a103758e48489bca409a48939cb4
+              name: 'Firebird: IO statistics on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_fetches]'
+                - sortorder: '1'
+                  color: F63100
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_marks]'
+                - sortorder: '2'
+                  color: 2774A4
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_reads]'
+                - sortorder: '3'
+                  color: A54F10
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},iostat_writes]'
+            - uuid: c619a4fe7bc74b5e9cdab98cf6d774ed
+              name: 'Firebird: memory usage on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: FF0000
+                  calc_fnc: MAX
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},memory_alloc]'
+                - sortorder: '1'
+                  color: 00FF00
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},memory_usage]'
+            - uuid: 68af69e0d7194435a9fa526c1cd90b27
+              name: 'Firebird: read-only state on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: FF7043
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_readonly]'
+            - uuid: 3a1bff0a9bbd4ded95a441d383b75c75
+              name: 'Firebird: record statistics on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 29B6F6
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},record_indexes]'
+                - sortorder: '1'
+                  color: 4CAF50
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},record_sequences]'
+            - uuid: 4e2dec7a12b544b594bb48949ba13220
+              name: 'Firebird: statements statistics on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},query_active]'
+                - sortorder: '1'
+                  color: 00FF00
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},query_idle]'
+                - sortorder: '2'
+                  color: BFFF00
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},query_stalled]'
+            - uuid: d6bd766d0e384d50bed534335ffbcde4
+              name: 'Firebird: status of {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},database_status]'
+            - uuid: e54a0cf492164a1fbab84ad3b5a955fe
+              name: 'Firebird: transactions statistics on {#FIREBIRD.DB.NAME}'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},trans_idle]'
+                - sortorder: '1'
+                  color: 0080FF
+                  item:
+                    host: 'Template DB Firebird'
+                    key: 'fbdb[{$FIREBIRD.CONNSTRING},{#FIREBIRD.DB.PATH},{$FIREBIRD.USER},{$FIREBIRD.PASSWORD},trans_active]'
+      macros:
+        - macro: '{$FB_CACHE_HIT_MIN}'
+          value: '90'
+          description: 'Minimum acceptable cache hit ratio in percent'
+        - macro: '{$FB_CRYPT_STATE_ALERT}'
+          value: '1'
+          description: 'Crypt_state > this value means encrypt/decrypt in progress (FB4+)'
+        - macro: '{$FB_FORCED_WRITES_DISABLED}'
+          value: '0'
+          description: 'Value of MON$FORCED_WRITES that indicates it is OFF'
+        - macro: '{$FB_LOCK_CONFLICTS_MAX}'
+          value: '0'
+          description: 'Maximum allowed lock conflicts (FB5+)'
+        - macro: '{$FB_LONG_TXN_COUNT_MAX}'
+          value: '0'
+          description: 'Allowed number of long running transactions (>300s)'
+        - macro: '{$FB_REPLICA_MODE_ALERT}'
+          value: '2'
+          description: 'Replica_mode value that indicates read-only replica (FB4+)'
+        - macro: '{$FB_RESERVE_SPACE_DISABLED}'
+          value: '0'
+          description: 'Value of MON$RESERVE_SPACE that indicates it is OFF'
+        - macro: '{$FB_SWEEP_ACTIVE_SEC}'
+          value: '600'
+          description: 'Seconds sweep may stay active before alert'
+        - macro: '{$FB_TXN_GAP_MAX}'
+          value: '500000'
+          description: 'Maximum allowed transaction gap (NEXT_TXN - OLDEST_ACTIVE) before alert'
+        - macro: '{$FIREBIRD.CONNSTRING}'
+          value: 127.0.0.1
+        - macro: '{$FIREBIRD.DB.MATCHES}'
+          value: .+
+        - macro: '{$FIREBIRD.DB.NOT_MATCHES}'
+          value: ^\s$
+        - macro: '{$FIREBIRD.LLD.PATH}'
+          value: '<Firebird-DBs-Path-for-LLD>'
+          description: /var/lib/firebird/3.0/data
+        - macro: '{$FIREBIRD.PASSWORD}'
+          value: '<Firebird-Password>'
+        - macro: '{$FIREBIRD.USER}'
+          value: '<Firebird-User>'

@@ -1,0 +1,185 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 2852468c7ccf4beeb32a9cd9e0b1bab5
+      template: 'Solax - Modbus'
+      name: 'Solax - Modbus'
+      description: |
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 1b321cb9eb0644cca3c772be74cb1000
+          name: 'Solax: SolarChargerUseMode'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,3,139]'
+          history: 90d
+          valuemap:
+            name: SolarChargerUseMode
+        - uuid: d9d551d7501e4107888ce4cea07881b0
+          name: 'Solax: Battery_MinCapacity'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,3,140]'
+          history: 90d
+          units: '%'
+        - uuid: f9152283b6be496c8dc8b7196e0e1799
+          name: 'Solax: GridVoltage'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,0]'
+          history: 90d
+          value_type: FLOAT
+          units: V
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+        - uuid: 68f3b3ffa26d4a4f889c328f51cf9743
+          name: 'Solax: GridCurrent'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,1,1,int16]'
+          history: 90d
+          value_type: FLOAT
+          units: A
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+            - type: MULTIPLIER
+              parameters:
+                - '-1'
+        - uuid: 8b6dc29494a64d70b0f490b3257670a4
+          name: 'Solax: GridPower'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,2,1,int16]'
+          history: 90d
+          value_type: FLOAT
+          units: W
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '-1'
+            - type: MULTIPLIER
+              parameters:
+                - '0.1'
+        - uuid: 387be0fc5efb4d17a392f2842ecbb883
+          name: 'Solax: Temperature - Radiator'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,8,1,int16]'
+          history: 90d
+          units: °C
+        - uuid: 89d29f29b90249babe3a185b376ebd13
+          name: 'Solax: Powerdc1'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,10]'
+          history: 90d
+          value_type: FLOAT
+          units: W
+        - uuid: 2b406dc662c6491a9d23dbec9b9db113
+          name: 'Solax: Powerdc2'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,11]'
+          history: 90d
+          value_type: FLOAT
+          units: W
+          triggers:
+            - uuid: f636a41d46b148468b0137ff07e9e4d1
+              expression: 'last(/Solax - Modbus/modbus.get[tcp://{$SOLAX.IP}:502,1,4,11]) > 399'
+              name: 'Detected Sun'
+              manual_close: 'YES'
+        - uuid: b9ae88b9e3774f2f896188854bdca6df
+          name: 'Solax: Battery Charge Power'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,22,1,int16]'
+          history: 90d
+          value_type: FLOAT
+          units: W
+          triggers:
+            - uuid: 971e6107dedb4dc48f941842a216e0e5
+              expression: 'last(/Solax - Modbus/modbus.get[tcp://{$SOLAX.IP}:502,1,4,22,1,int16])>0'
+              name: Charging
+        - uuid: 15e0c778714c4aa58fc30a0f8e191a66
+          name: 'Solax: Temperature - Battery'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,24,1,int16]'
+          history: 90d
+          units: °C
+        - uuid: d6fccbe4a12e434db1a4f2ce5933f010
+          name: 'Solax: Battery Capacity'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,28]'
+          history: 90d
+          units: '%'
+        - uuid: b10f36467ef540d4bf7bb0a6ae52219a
+          name: 'Solax: Feedin power'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,70,1,int32,mbe]'
+          history: 90d
+          value_type: FLOAT
+          units: W
+          triggers:
+            - uuid: da0957992a9e4870b2ea46244dbb2e00
+              expression: 'last(/Solax - Modbus/modbus.get[tcp://{$SOLAX.IP}:502,1,4,70,1,int32,mbe]) >0'
+              name: 'Sending Energy'
+              manual_close: 'YES'
+        - uuid: 39bac1d49bd84151b80d20432261f688
+          name: 'Solax: EPSPower'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,78]'
+          history: 90d
+          value_type: FLOAT
+          units: W
+        - uuid: c7796601885545d59dd282a9c00e194d
+          name: 'Solax: Today Energy'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,80,1,uint16]'
+          history: 90d
+          units: Wh
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '100'
+        - uuid: 7abcb7e05cd24c1cb7a99d0f2d6dc2d6
+          name: 'Solax: Total Energy'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,82,1,uint32,mbe]'
+          history: 90d
+          units: Wh
+          valuemap:
+            name: SolarChargerUseMode
+        - uuid: c5cfbd6ef5544f12bfb9373519247de3
+          name: 'Solax: Total Solar Energy'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,148,1,uint32,mbe]'
+          history: 90d
+          units: Wh
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '100'
+        - uuid: c0069f623aa54a88990be9c2fa5c45fb
+          name: 'Solax: Today Solar Energy'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,150,1,uint16]'
+          history: 90d
+          units: Wh
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '10'
+        - uuid: 09d660da86fa42aa9f27c7b44341aef0
+          name: 'Solax: Today Feedin Energy'
+          key: 'modbus.get[tcp://{$SOLAX.IP}:502,1,4,152,1,uint16,be]'
+          history: 90d
+          units: Wh
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '100'
+      macros:
+        - macro: '{$SOLAX.IP}'
+          value: 10.1.1.102
+      valuemaps:
+        - uuid: 09fcb6e3de4d43d58862f2258afb9aa4
+          name: SolarChargerUseMode
+          mappings:
+            - value: '0'
+              newvalue: 'Self use mode'
+            - value: '1'
+              newvalue: ForceTimeUse
+            - value: '2'
+              newvalue: 'Back Up Mode'
+            - value: '3'
+              newvalue: 'Feedin Priority'

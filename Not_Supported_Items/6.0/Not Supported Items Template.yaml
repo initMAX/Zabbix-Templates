@@ -1,0 +1,167 @@
+zabbix_export:
+  version: '6.0'
+  date: '2023-09-15T09:05:51Z'
+  groups:
+    - uuid: 6b17349efbed4031a77ac1907c738577
+      name: initMAX
+  templates:
+    - uuid: 59ed666ab1654062a4191b1d74af92d4
+      template: 'Not Supported Items Template'
+      name: 'Not Supported Items Template'
+      description: |
+        Items for counting number of Unsupported Items and No Longer Discovered Items on Host.
+  
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      groups:
+        - name: initMAX
+      items:
+        - uuid: 252b7505485e407ab52194f83e4a80f3
+          name: 'NLD Items Count'
+          type: SCRIPT
+          key: nld.item.count
+          delay: 1h
+          params: |
+            // Script for listing not supported items on established guests.  
+            // initMAX - Alois Zadražil, 2.5.2023
+            
+            var request = new HttpRequest(),
+                logLevel = 3,
+                logPrefix = "NLD Items: ",
+                params = JSON.parse(value);
+            try {
+            
+                //Parse input params
+                hostName = params.HOSTNAME;
+                zabbixURL = params.URL + "/api_jsonrpc.php";
+                auth = params.API_KEY;
+            
+                // Request on hostid
+                var json_request = '{ "jsonrpc": "2.0", "method": "host.get","params": { "output": ["hostid"], "filter": { "host": "' + hostName + '" }, "sortfield": "name"}, "auth": "' + auth + '", "id": 1}';
+                result = request.post(zabbixURL, json_request);
+                if (request.getStatus() != 200) {
+                    throw 'Response code: ' + request.getStatus();
+                }
+                //Zabbix.log(logLevel, logPrefix + ' ID: ' + result);
+            
+                var hostId = JSON.parse(result).result[0].hostid;
+            
+                // Dotaz na Non Supported Items
+                json_request = '{ "jsonrpc": "2.0", "method": "item.get","params": { "hostids":"' + hostId + '","output": ["hostid", "itemid", "name", "key_"], "selectItemDiscovery":"extend", "sortfield": "name"}, "auth": "' + auth + '", "id": 1}';
+                result = request.post(zabbixURL, json_request);
+                if (request.getStatus() != 200) {
+                    throw 'Response code: ' + request.getStatus();
+                }
+            
+                var nldValueCount = 0;
+                var nsValue = JSON.parse(result).result;
+                //Zabbix.log(logLevel, logPrefix + ' ID: ' + JSON.stringify(nsValue));
+            
+                for (var i = 0; i < nsValue.length; i++) {
+                    //Zabbix.log(logLevel, logPrefix + ' ts: ' + nsValue[i].itemDiscovery.ts_delete);
+                    if (nsValue[i].itemDiscovery.ts_delete > 0) {
+                        nldValueCount++
+                    }
+                }
+            
+                return nldValueCount;
+            }
+            catch (error) {
+                Zabbix.log(logLevel, logPrefix + ' ERROR: ' + error);
+                throw 'Script failed: ' + error;
+            }
+          description: 'count of Items not longer discovered'
+          timeout: 5s
+          parameters:
+            - name: API_KEY
+              value: '{$NS.API.KEY}'
+            - name: HOSTNAME
+              value: '{HOST.HOST}'
+            - name: URL
+              value: '{$NS.API.URL}'
+          triggers:
+            - uuid: 62fb04aad1554ce7b0ae952a55f3217c
+              expression: 'last(/Not Supported Items Template/nld.item.count)>{$NLD.ITEMS.COUNT}'
+              name: 'More than {$NLD.ITEMS.COUNT} Not Longer Discovered Items on Host'
+              priority: WARNING
+              manual_close: 'YES'
+            - uuid: 4a2a9ada6c7b4eb2a41857fbf3ab7b9f
+              expression: 'monoinc(/Not Supported Items Template/nld.item.count,#5,"weak")=1'
+              name: 'Number of Not Longer Discovered Items is rising on Host'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 6bda05e417ec42ae98518aa0afa577db
+          name: 'NS Items Count'
+          type: SCRIPT
+          key: ns.item.count
+          delay: 1h
+          params: |
+            // Not supported items on Hosts
+            // initMAX - Alois Zadrazil, 2.5.2023
+            
+            var request = new HttpRequest(),
+                logLevel = 3,
+                logPrefix = "NS Items: ",
+                params = JSON.parse(value);
+            try {
+            
+                //Parse input params
+                hostName = params.HOSTNAME;
+                zabbixURL = params.URL + "/api_jsonrpc.php";
+                auth = params.API_KEY;
+            
+                // Request on hostid
+                var json_request = '{ "jsonrpc": "2.0", "method": "host.get","params": { "output": ["hostid"], "filter": { "host": "' + hostName + '" }, "sortfield": "name"}, "auth": "' + auth + '", "id": 1}';
+                result = request.post(zabbixURL, json_request);
+                if (request.getStatus() != 200) {
+                    throw 'Response code: ' + request.getStatus();
+                }
+            
+                var hostId = JSON.parse(result).result[0].hostid;
+            
+                // Request on Non Supported Items
+                json_request = '{ "jsonrpc": "2.0", "method": "item.get","params": { "hostids":"' + hostId + '","output": ["hostid", "itemid", "name", "key_"], "filter": { "state": "1" }, "sortfield": "name"}, "auth": "' + auth + '", "id": 1}';
+                result = request.post(zabbixURL, json_request);
+                if (request.getStatus() != 200) {
+                    throw 'Response code: ' + request.getStatus();
+                }
+            
+                var nsValueCount = JSON.parse(result).result.length;
+            
+                return nsValueCount;
+            }
+            catch (error) {
+                Zabbix.log(logLevel, logPrefix + ' ERROR: ' + error);
+                throw 'Script failed: ' + error;
+            }
+          timeout: 5s
+          parameters:
+            - name: API_KEY
+              value: '{$NS.API.KEY}'
+            - name: URL
+              value: '{$NS.API.URL}'
+            - name: HOSTNAME
+              value: '{HOST.HOST}'
+          triggers:
+            - uuid: d4e5d62ebeff47f49e503458e9e57697
+              expression: 'last(/Not Supported Items Template/ns.item.count)>{$NS.ITEMS.COUNT}'
+              name: 'More than {$NS.ITEMS.COUNT} Not Supported Items on Host'
+              priority: WARNING
+              manual_close: 'YES'
+            - uuid: 6ef3f641daef4fe883263f02f2e4cbe5
+              expression: 'monoinc(/Not Supported Items Template/ns.item.count,#5,"weak")=1'
+              name: 'Number of Not Supported Items is rising on Host'
+              priority: WARNING
+              manual_close: 'YES'
+      macros:
+        - macro: '{$NLD.ITEMS.COUNT}'
+          value: '10'
+        - macro: '{$NS.API.KEY}'
+          value: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        - macro: '{$NS.API.URL}'
+          value: 'https://<zabbix.dns>/zabbix'
+        - macro: '{$NS.ITEMS.COUNT}'
+          value: '10'
