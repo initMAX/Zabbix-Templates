@@ -1,0 +1,1391 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: b0f6fd01a42e4ed5bbc69eed0f0c1799
+      template: 'Proxmox Backup Server by HTTP'
+      name: 'Proxmox Backup Server by HTTP'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 551cec829eb542e49ed110ea2c3513dc
+          name: 'API service status'
+          type: SCRIPT
+          key: pbs.api.available
+          delay: 5m
+          history: 7d
+          trends: '0'
+          params: |
+            try {
+                var params = JSON.parse(value);
+                var req = new HttpRequest();
+                req.addHeader('Authorization: PBSAPIToken=' + params.token + ':' + params.secret);
+                req.get(encodeURI('https://' + params.url + ':' + params.port + '/api2/json/version'));
+            } catch (error) {
+                Zabbix.log(3, 'Proxmox Backup Server API failed: ' + params.url + ' Error: ' + error);
+                if (!Number.isInteger(error))
+                    return 520;
+            }
+            return req.getStatus();
+          description: 'Get API service status (HTTP response code of the /version endpoint).'
+          valuemap:
+            name: 'HTTP response status code'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          timeout: 10s
+          parameters:
+            - name: port
+              value: '{$PBS.URL.PORT}'
+            - name: secret
+              value: '{$PBS.TOKEN.SECRET}'
+            - name: token
+              value: '{$PBS.TOKEN.ID}'
+            - name: url
+              value: '{$PBS.URL.HOST}'
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 8d373327cefe4a07bac243014e29622e
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.api.available)<>200'
+              name: 'Proxmox Backup Server: API service not available'
+              priority: HIGH
+              description: 'The API service is not available. Check your network and authorization settings.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 1f6f7d8b5d9c43c6948e881c5c802a7d
+          name: 'Get datastore usage'
+          type: HTTP_AGENT
+          key: pbs.datastore.usage
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'List of datastores with usage statistics (master item for datastore discovery).'
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+          timeout: 15s
+          url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/status/datastore-usage'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: cb1cc48d864e4b18bea71e64346e3345
+          name: 'CPU utilization'
+          type: DEPENDENT
+          key: pbs.node.cpu
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          description: 'Host CPU utilization in percent.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.cpu
+            - type: MULTIPLIER
+              parameters:
+                - '100'
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: cpu
+          triggers:
+            - uuid: 96753fcddc05451e83c13b535918680f
+              expression: 'min(/Proxmox Backup Server by HTTP/pbs.node.cpu,5m)>{$PBS.CPU.UTIL.MAX.WARN}'
+              name: 'Proxmox Backup Server: High CPU utilization'
+              priority: WARNING
+              description: 'Host CPU utilization has been above the threshold for 5 minutes.'
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: d2848cf295284ed9a250165d1c156a7e
+          name: 'CPU cores'
+          type: DEPENDENT
+          key: pbs.node.cpu.cores
+          delay: '0'
+          history: 7d
+          description: 'Number of CPU cores.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.cpuinfo.cpus
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 976113f70ed84790854bc992c8fecb7f
+          name: 'Kernel version'
+          type: DEPENDENT
+          key: pbs.node.kernel
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          description: 'Running kernel version.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.kversion
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: system
+        - uuid: f0b96c30a0e245f697eb0e506458349a
+          name: 'Load average (1m)'
+          type: DEPENDENT
+          key: pbs.node.load.avg1
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          description: 'System load average over 1 minute.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.data.loadavg[0]'
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 80e205cb45894e6ca873ca1cccd02766
+          name: 'Load average (5m)'
+          type: DEPENDENT
+          key: pbs.node.load.avg5
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          description: 'System load average over 5 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.data.loadavg[1]'
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 94c9d4e29fe946a28320e79aa5bb179f
+          name: 'Load average (15m)'
+          type: DEPENDENT
+          key: pbs.node.load.avg15
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          description: 'System load average over 15 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.data.loadavg[2]'
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: accabb21ca1e4c3c8b05512b20daf912
+          name: 'Memory utilization'
+          type: CALCULATED
+          key: pbs.node.memory.pused
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          params: 'last(//pbs.node.memory.used)/last(//pbs.node.memory.total)*100'
+          description: 'Used physical memory in percent.'
+          tags:
+            - tag: component
+              value: memory
+          triggers:
+            - uuid: 5ccc1a87292b45c1899b37f10fdab960
+              expression: 'min(/Proxmox Backup Server by HTTP/pbs.node.memory.pused,5m)>{$PBS.MEMORY.UTIL.MAX.WARN}'
+              name: 'Proxmox Backup Server: High memory utilization'
+              priority: WARNING
+              description: 'Host memory utilization has been above the threshold for 5 minutes.'
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: 1efa2d6468014a098607907f017b4e27
+          name: 'Memory total'
+          type: DEPENDENT
+          key: pbs.node.memory.total
+          delay: '0'
+          history: 7d
+          units: B
+          description: 'Total physical memory in bytes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.memory.total
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: memory
+        - uuid: fa69233699fe45749f6689ad3b0baea0
+          name: 'Memory used'
+          type: DEPENDENT
+          key: pbs.node.memory.used
+          delay: '0'
+          history: 7d
+          units: B
+          description: 'Used physical memory in bytes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.memory.used
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 00567f0b02ad495b811ba5b5a8541d59
+          name: 'Root filesystem utilization'
+          type: CALCULATED
+          key: pbs.node.root.pused
+          delay: 5m
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          params: 'last(//pbs.node.root.used)/last(//pbs.node.root.total)*100'
+          description: 'Used space on the root filesystem in percent.'
+          tags:
+            - tag: component
+              value: storage
+          triggers:
+            - uuid: 28a86de3e01649a280b95836b3020286
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.node.root.pused)>{$PBS.ROOT.PUSE.MAX.WARN}'
+              name: 'Proxmox Backup Server: Root filesystem low on free space'
+              priority: WARNING
+              description: 'Root filesystem usage is above the warning threshold.'
+              tags:
+                - tag: scope
+                  value: capacity
+        - uuid: ac3e830823054a888ff47c958e30f537
+          name: 'Root filesystem total'
+          type: DEPENDENT
+          key: pbs.node.root.total
+          delay: '0'
+          history: 7d
+          units: B
+          description: 'Total size of the root filesystem in bytes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.root.total
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 8fb4998ccd2947cd8655961c629f6e54
+          name: 'Root filesystem used'
+          type: DEPENDENT
+          key: pbs.node.root.used
+          delay: '0'
+          history: 7d
+          units: B
+          description: 'Used space on the root filesystem in bytes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.root.used
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: storage
+        - uuid: be57887e9d0f446082bcefdc284f64f3
+          name: 'Get node status'
+          type: HTTP_AGENT
+          key: pbs.node.status
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Raw node status from /nodes/localhost/status (master item for host metrics).'
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+          timeout: 15s
+          url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/nodes/localhost/status'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: f1d611cac98e4f85983d4ea2e28a58e8
+          name: 'Swap total'
+          type: DEPENDENT
+          key: pbs.node.swap.total
+          delay: '0'
+          history: 7d
+          units: B
+          description: 'Total swap space in bytes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.swap.total
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: memory
+        - uuid: c37142b231ea4484b26c7b2797217934
+          name: 'Swap used'
+          type: DEPENDENT
+          key: pbs.node.swap.used
+          delay: '0'
+          history: 7d
+          units: B
+          description: 'Used swap space in bytes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.swap.used
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 1f1d953737bf436e80ce4220b37bb5c2
+          name: Uptime
+          type: DEPENDENT
+          key: pbs.node.uptime
+          delay: '0'
+          history: 7d
+          units: uptime
+          description: 'Host uptime in seconds.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.uptime
+          master_item:
+            key: pbs.node.status
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 8356012fc99e41e09ef4dc19cc2aa6b4
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.node.uptime)<600'
+              name: 'Proxmox Backup Server: Host has been restarted'
+              priority: INFO
+              description: 'The PBS host uptime is less than 10 minutes, indicating a recent restart.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: fe831ee4cb4b48dc9e0bbd1eab1c40ce
+          name: 'Get backup tasks'
+          type: HTTP_AGENT
+          key: pbs.tasks.backup.get
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Recent backup tasks from /nodes/localhost/tasks (master item for per-datastore backup duration and failure counts).'
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+          timeout: 30s
+          url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/nodes/localhost/tasks'
+          query_fields:
+            - name: typefilter
+              value: backup
+            - name: limit
+              value: '500'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: ea825d5a42b1443b91da46b31a2ede15
+          name: 'Get version'
+          type: HTTP_AGENT
+          key: pbs.version
+          delay: 1h
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          description: 'Proxmox Backup Server version information.'
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+          timeout: 15s
+          url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/version'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 25e88376813c4532a9cd33da78267d18
+          name: Version
+          type: DEPENDENT
+          key: pbs.version.string
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          description: 'Proxmox Backup Server version string.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.version
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          master_item:
+            key: pbs.version
+          tags:
+            - tag: component
+              value: system
+      discovery_rules:
+        - uuid: 01eb2d203e2e41da82ae5fc55e715705
+          name: 'Datastore discovery'
+          type: DEPENDENT
+          key: pbs.datastore.discovery
+          delay: '0'
+          description: 'Discovery of configured datastores via /status/datastore-usage.'
+          item_prototypes:
+            - uuid: b5ad2b9d7f264896b7b9d2f91508cad2
+              name: 'Datastore [{#DATASTORE}]: Available space'
+              type: DEPENDENT
+              key: 'pbs.datastore.avail[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: B
+              description: 'Available datastore space in bytes.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.store=="{#DATASTORE}")].avail.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 10m
+              master_item:
+                key: pbs.datastore.usage
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 42a1cdc13e914fdaa9c59b6034705747
+              name: 'Datastore [{#DATASTORE}]: Latest backup age'
+              type: CALCULATED
+              key: 'pbs.datastore.backup.age[{#DATASTORE}]'
+              delay: 5m
+              history: 7d
+              value_type: FLOAT
+              units: s
+              params: '(last(//pbs.datastore.backup.last[{#DATASTORE}])>0)*(now()-last(//pbs.datastore.backup.last[{#DATASTORE}]))'
+              description: 'Age of the latest backup in seconds (now - latest backup time). Returns 0 when no backup exists yet.'
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 5d48aac04d764dfcad7d0f8977778e79
+              name: 'Datastore [{#DATASTORE}]: Total backups count'
+              type: DEPENDENT
+              key: 'pbs.datastore.backup.count[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              description: 'Total number of backup snapshots across all groups on the datastore (sum of backup-count).'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'try { return (JSON.parse(value).data || []).reduce(function(s, g) { return s + (g[''backup-count''] || 0); }, 0); } catch (e) { return 0; }'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pbs.datastore.groups.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 746f409c31b34da5a0512c768fdc7bc5
+              name: 'Datastore [{#DATASTORE}]: Latest backup duration'
+              type: DEPENDENT
+              key: 'pbs.datastore.backup.duration[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: s
+              description: 'Duration of the most recent backup task for this datastore (endtime - starttime).'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      try {
+                        var tasks = JSON.parse(value).data || [];
+                        var pfx = '{#DATASTORE}:';
+                        var best = null;
+                        for (var i = 0; i < tasks.length; i++) {
+                          var t = tasks[i];
+                          if ((t.worker_id || '').indexOf(pfx) === 0 && t.endtime) {
+                            if (best === null || t.starttime > best.starttime) best = t;
+                          }
+                        }
+                        return best ? (best.endtime - best.starttime) : 0;
+                      } catch (e) { return 0; }
+              master_item:
+                key: pbs.tasks.backup.get
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 1c98aa056d324119bc638d0bfce3c935
+              name: 'Datastore [{#DATASTORE}]: Failed backups (24h)'
+              type: DEPENDENT
+              key: 'pbs.datastore.backup.failed[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              description: 'Number of failed backup tasks for this datastore in the last 24 hours.'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      try {
+                        var tasks = JSON.parse(value).data || [];
+                        var pfx = '{#DATASTORE}:';
+                        var cutoff = Math.floor(Date.now() / 1000) - 86400;
+                        var n = 0;
+                        for (var i = 0; i < tasks.length; i++) {
+                          var t = tasks[i];
+                          if ((t.worker_id || '').indexOf(pfx) === 0 && t.status && t.status !== 'OK' && (t.endtime || 0) >= cutoff) n++;
+                        }
+                        return n;
+                      } catch (e) { return 0; }
+              master_item:
+                key: pbs.tasks.backup.get
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+              trigger_prototypes:
+                - uuid: 4650bca9f49140028d3703da5aa6f863
+                  expression: 'last(/Proxmox Backup Server by HTTP/pbs.datastore.backup.failed[{#DATASTORE}])>0'
+                  name: 'Proxmox Backup Server: Datastore [{#DATASTORE}] has failed backups in the last 24h'
+                  priority: HIGH
+                  description: 'One or more backup tasks for this datastore have failed in the last 24 hours.'
+                  tags:
+                    - tag: datastore
+                      value: '{#DATASTORE}'
+                    - tag: scope
+                      value: backup
+            - uuid: 17837f5a13264e8ea25118b7476936d1
+              name: 'Datastore [{#DATASTORE}]: Backup groups count'
+              type: DEPENDENT
+              key: 'pbs.datastore.backup.groups[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              description: 'Number of distinct backup groups (vm/ct/host targets) on the datastore.'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'try { return (JSON.parse(value).data || []).length; } catch (e) { return 0; }'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pbs.datastore.groups.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+              trigger_prototypes:
+                - uuid: 42207445a42249d0b8af640117715f15
+                  expression: 'last(/Proxmox Backup Server by HTTP/pbs.datastore.backup.groups[{#DATASTORE}])=0'
+                  name: 'Proxmox Backup Server: Datastore [{#DATASTORE}] has no backup groups'
+                  priority: WARNING
+                  description: 'The datastore contains no backup groups.'
+                  tags:
+                    - tag: datastore
+                      value: '{#DATASTORE}'
+                    - tag: scope
+                      value: backup
+            - uuid: 49672cf1647344d59c3c4771604813aa
+              name: 'Datastore [{#DATASTORE}]: Latest backup time'
+              type: DEPENDENT
+              key: 'pbs.datastore.backup.last[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              trends: '0'
+              units: unixtime
+              description: 'UNIX timestamp of the most recent backup across all groups on the datastore.'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'try { var groups = JSON.parse(value).data || []; var max = 0; for (var i = 0; i < groups.length; i++) { var t = groups[i][''last-backup''] || 0; if (t > max) max = t; } return max; } catch (e) { return 0; }'
+              master_item:
+                key: 'pbs.datastore.groups.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 2a2f59baacc44212a7c03a2f0222a5de
+              name: 'Datastore [{#DATASTORE}]: Total backup size'
+              type: DEPENDENT
+              key: 'pbs.datastore.backup.size[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              units: B
+              description: 'Sum of the size of all backup snapshots on the datastore.'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'try { return (JSON.parse(value).data || []).reduce(function(s, e) { return s + (e.size || 0); }, 0); } catch (e) { return 0; }'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pbs.datastore.snapshots.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: backup
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 38e388eb5db64ed4a6b9593d5206938a
+              name: 'Datastore [{#DATASTORE}]: Get config'
+              type: HTTP_AGENT
+              key: 'pbs.datastore.config.get[{#DATASTORE}]'
+              delay: 1h
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Datastore configuration (used to read the GC schedule).'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Error getting data'
+              timeout: 15s
+              url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/config/datastore/{#DATASTORE}'
+              headers:
+                - name: Authorization
+                  value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+              tags:
+                - tag: component
+                  value: raw
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: b0801398b20245faa60112103c93f179
+              name: 'Datastore [{#DATASTORE}]: Error'
+              type: DEPENDENT
+              key: 'pbs.datastore.error[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: TEXT
+              trends: '0'
+              description: 'Error description if any.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.store=="{#DATASTORE}")].error.first()'
+                  error_handler: CUSTOM_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 10m
+              master_item:
+                key: pbs.datastore.usage
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+              trigger_prototypes:
+                - uuid: 609869dcd4004fd9a6aa15989c84b8e6
+                  expression: 'length(last(/Proxmox Backup Server by HTTP/pbs.datastore.error[{#DATASTORE}]))>0 and last(/Proxmox Backup Server by HTTP/pbs.datastore.error[{#DATASTORE}])<>"null"'
+                  name: 'Proxmox Backup Server: Datastore [{#DATASTORE}] has error'
+                  priority: HIGH
+                  description: 'Datastore has reported an error condition.'
+                  tags:
+                    - tag: datastore
+                      value: '{#DATASTORE}'
+                    - tag: scope
+                      value: availability
+            - uuid: 89ba18f382c34058bb7c43a73a464ba5
+              name: 'Datastore [{#DATASTORE}]: Estimated full date'
+              type: DEPENDENT
+              key: 'pbs.datastore.estfull[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              trends: '0'
+              units: unixtime
+              description: |
+                Estimation of when the datastore will be full (UNIX epoch). 0 means never, declining
+                usage, or not enough RRD history yet. PBS only returns the estimated-full-date field
+                once it has collected enough usage history (roughly a month), so this item reports 0
+                until then.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.store=="{#DATASTORE}")][''estimated-full-date''].first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: pbs.datastore.usage
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+              trigger_prototypes:
+                - uuid: 04420776753f43618b6f59e19a2f8198
+                  expression: 'last(/Proxmox Backup Server by HTTP/pbs.datastore.estfull[{#DATASTORE}])>now() and (last(/Proxmox Backup Server by HTTP/pbs.datastore.estfull[{#DATASTORE}])-now())<7*86400'
+                  name: 'Proxmox Backup Server: Datastore [{#DATASTORE}] estimated full within 7 days'
+                  priority: WARNING
+                  description: 'Datastore is estimated to become full within the next 7 days.'
+                  tags:
+                    - tag: datastore
+                      value: '{#DATASTORE}'
+                    - tag: scope
+                      value: capacity
+            - uuid: cf9821b0d1484592865e121a1e37979a
+              name: 'Datastore [{#DATASTORE}]: Get GC status'
+              type: HTTP_AGENT
+              key: 'pbs.datastore.gc.get[{#DATASTORE}]'
+              delay: 1h
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Garbage collection status of the datastore.'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Error getting data'
+              timeout: 15s
+              url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/admin/datastore/{#DATASTORE}/gc'
+              headers:
+                - name: Authorization
+                  value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+              tags:
+                - tag: component
+                  value: raw
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: f62976c53fdc41ba88c777536efdbe93
+              name: 'Datastore [{#DATASTORE}]: GC pending chunks'
+              type: DEPENDENT
+              key: 'pbs.datastore.gc.pending.chunks[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              description: 'Number of chunks pending removal after the last garbage collection.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[''pending-chunks'']'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pbs.datastore.gc.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 2aca5256a105408a9ae5b2730004247b
+              name: 'Datastore [{#DATASTORE}]: GC removed bytes'
+              type: DEPENDENT
+              key: 'pbs.datastore.gc.removed.bytes[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              units: B
+              description: 'Bytes removed by the last garbage collection run.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[''removed-bytes'']'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pbs.datastore.gc.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: fdcb7c38b1224fe88995f0fde6d9ed50
+              name: 'Datastore [{#DATASTORE}]: GC schedule'
+              type: DEPENDENT
+              key: 'pbs.datastore.gc.schedule[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: TEXT
+              trends: '0'
+              description: 'Configured garbage collection schedule (gc-schedule from the datastore config). Empty when no schedule is set.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[''gc-schedule'']'
+                  error_handler: CUSTOM_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pbs.datastore.config.get[{#DATASTORE}]'
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: b4a8df261f644a6b8c083723b1cad4ae
+              name: 'Datastore [{#DATASTORE}]: Get backup groups'
+              type: HTTP_AGENT
+              key: 'pbs.datastore.groups.get[{#DATASTORE}]'
+              delay: 5m
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'List of backup groups (vm/ct/host) with last-backup time and backup-count per group.'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Error getting data'
+              timeout: 30s
+              url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/admin/datastore/{#DATASTORE}/groups'
+              headers:
+                - name: Authorization
+                  value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+              tags:
+                - tag: component
+                  value: raw
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: b38ac25d527b4ca5884af0de3d8c2c06
+              name: 'Datastore [{#DATASTORE}]: Used percentage'
+              type: CALCULATED
+              key: 'pbs.datastore.pused[{#DATASTORE}]'
+              delay: 5m
+              history: 7d
+              value_type: FLOAT
+              units: '%'
+              params: 'last(//pbs.datastore.used[{#DATASTORE}])/last(//pbs.datastore.total[{#DATASTORE}])*100'
+              description: 'Used datastore space in percentage.'
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+              trigger_prototypes:
+                - uuid: ac17885dd6ff405d9ccb3a6f358d2ff7
+                  expression: 'last(/Proxmox Backup Server by HTTP/pbs.datastore.pused[{#DATASTORE}])>{$PBS.DATASTORE.PUSE.MAX.WARN:"{#DATASTORE}"}'
+                  name: 'Proxmox Backup Server: Datastore [{#DATASTORE}] high filesystem space usage'
+                  priority: WARNING
+                  description: 'Datastore filesystem usage is above the warning threshold.'
+                  tags:
+                    - tag: datastore
+                      value: '{#DATASTORE}'
+                    - tag: scope
+                      value: capacity
+            - uuid: e62e916730e8450b807f1b264038b4e3
+              name: 'Datastore [{#DATASTORE}]: Get snapshots'
+              type: HTTP_AGENT
+              key: 'pbs.datastore.snapshots.get[{#DATASTORE}]'
+              delay: 1h
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'List of all backup snapshots with per-snapshot size.'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Error getting data'
+              timeout: 60s
+              url: 'https://{$PBS.URL.HOST}:{$PBS.URL.PORT}/api2/json/admin/datastore/{#DATASTORE}/snapshots'
+              headers:
+                - name: Authorization
+                  value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+              tags:
+                - tag: component
+                  value: raw
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 71edc51b67f946d1b3bad99e72b13dac
+              name: 'Datastore [{#DATASTORE}]: Total space'
+              type: DEPENDENT
+              key: 'pbs.datastore.total[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: B
+              description: 'Total datastore space in bytes.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.store=="{#DATASTORE}")].total.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: pbs.datastore.usage
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+            - uuid: 9d82a8ac17ed4b1691f4b19ce4e7dd52
+              name: 'Datastore [{#DATASTORE}]: Used space'
+              type: DEPENDENT
+              key: 'pbs.datastore.used[{#DATASTORE}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: B
+              description: 'Used datastore space in bytes.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.store=="{#DATASTORE}")].used.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 10m
+              master_item:
+                key: pbs.datastore.usage
+              tags:
+                - tag: component
+                  value: datastore
+                - tag: datastore
+                  value: '{#DATASTORE}'
+          trigger_prototypes:
+            - uuid: 243b7241aa144e51baecd6a0cfb993ae
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.datastore.backup.last[{#DATASTORE}])>0 and last(/Proxmox Backup Server by HTTP/pbs.datastore.backup.age[{#DATASTORE}])>{$PBS.BACKUP.AGE.WARN:"{#DATASTORE}"}'
+              name: 'Proxmox Backup Server: Datastore [{#DATASTORE}] latest backup is too old'
+              priority: WARNING
+              description: 'No new backup snapshots have been created within the configured time window.'
+              tags:
+                - tag: datastore
+                  value: '{#DATASTORE}'
+                - tag: scope
+                  value: backup
+          graph_prototypes:
+            - uuid: dd5abd110876462cb95696322d5edf53
+              name: 'Datastore [{#DATASTORE}]: Backups'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Proxmox Backup Server by HTTP'
+                    key: 'pbs.datastore.backup.count[{#DATASTORE}]'
+                - sortorder: '1'
+                  color: F63100
+                  yaxisside: RIGHT
+                  item:
+                    host: 'Proxmox Backup Server by HTTP'
+                    key: 'pbs.datastore.backup.age[{#DATASTORE}]'
+            - uuid: b22e293078a946038d736a23f6a30f95
+              name: 'Datastore [{#DATASTORE}]: Storage usage'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Proxmox Backup Server by HTTP'
+                    key: 'pbs.datastore.total[{#DATASTORE}]'
+                - sortorder: '1'
+                  drawtype: GRADIENT_LINE
+                  color: F63100
+                  item:
+                    host: 'Proxmox Backup Server by HTTP'
+                    key: 'pbs.datastore.used[{#DATASTORE}]'
+                - sortorder: '2'
+                  drawtype: GRADIENT_LINE
+                  color: 2774A4
+                  item:
+                    host: 'Proxmox Backup Server by HTTP'
+                    key: 'pbs.datastore.avail[{#DATASTORE}]'
+          master_item:
+            key: pbs.datastore.usage
+          lld_macro_paths:
+            - lld_macro: '{#DATASTORE}'
+              path: $.store
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data
+      tags:
+        - tag: class
+          value: application
+        - tag: target
+          value: proxmox-backup-server
+      macros:
+        - macro: '{$PBS.BACKUP.AGE.WARN}'
+          value: '90000'
+          description: 'Maximum age of the latest backup in seconds (default 25 hours). Override per datastore via context, e.g. {$PBS.BACKUP.AGE.WARN:"backup-fast"}.'
+        - macro: '{$PBS.CPU.UTIL.MAX.WARN}'
+          value: '90'
+          description: 'Host CPU utilization warning threshold in percent.'
+        - macro: '{$PBS.DATASTORE.PUSE.MAX.WARN}'
+          value: '90'
+          description: 'Maximum used datastore space in percentage.'
+        - macro: '{$PBS.MEMORY.UTIL.MAX.WARN}'
+          value: '90'
+          description: 'Host memory utilization warning threshold in percent.'
+        - macro: '{$PBS.ROOT.PUSE.MAX.WARN}'
+          value: '90'
+          description: 'Root filesystem utilization warning threshold in percent.'
+        - macro: '{$PBS.TOKEN.ID}'
+          value: USER@REALM!TOKENID
+          description: 'API token ID for stateless access to the REST API.'
+        - macro: '{$PBS.TOKEN.SECRET}'
+          value: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+          description: 'Secret key of the API token.'
+        - macro: '{$PBS.URL.HOST}'
+          value: '<SET PBS HOST>'
+          description: 'The hostname or IP address of the Proxmox Backup Server API host.'
+        - macro: '{$PBS.URL.PORT}'
+          value: '8007'
+          description: 'The API uses HTTPS and listens on port 8007 by default.'
+      dashboards:
+        - uuid: d2fd0df83b3a4b54b19e49949ef54740
+          name: 'Proxmox Backup Server overview'
+          pages:
+            - widgets:
+                - type: item
+                  name: 'API status'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'Proxmox Backup Server by HTTP'
+                        key: pbs.api.available
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                - type: honeycomb
+                  name: 'CPU utilization'
+                  'y': '3'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'CPU utilization'
+                    - type: STRING
+                      name: reference
+                      value: HCCPU
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: 4CAF50
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: FF9800
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '80'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: F44336
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '90'
+                - type: svggraph
+                  name: 'CPU & load average'
+                  'y': '8'
+                  width: '36'
+                  height: '7'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: F63100
+                    - type: STRING
+                      name: ds.0.hosts.0
+                      value: 'Proxmox Backup Server by HTTP'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'CPU utilization'
+                    - type: STRING
+                      name: ds.1.color
+                      value: 2774A4
+                    - type: STRING
+                      name: ds.1.hosts.0
+                      value: 'Proxmox Backup Server by HTTP'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Load average (1m)'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '2'
+                    - type: STRING
+                      name: reference
+                      value: SGCPU
+                - type: graphprototype
+                  name: 'Datastore storage usage'
+                  'y': '15'
+                  width: '36'
+                  height: '8'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'Proxmox Backup Server by HTTP'
+                        name: 'Datastore [{#DATASTORE}]: Storage usage'
+                    - type: STRING
+                      name: reference
+                      value: AAAAC
+                - type: item
+                  name: Version
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'Proxmox Backup Server by HTTP'
+                        key: pbs.version.string
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                - type: honeycomb
+                  name: 'Memory utilization'
+                  x: '24'
+                  'y': '3'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'Memory utilization'
+                    - type: STRING
+                      name: reference
+                      value: HCMEM
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: 4CAF50
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: FF9800
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '80'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: F44336
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '90'
+                - type: item
+                  name: Uptime
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'Proxmox Backup Server by HTTP'
+                        key: pbs.node.uptime
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                - type: svggraph
+                  name: 'Memory & swap'
+                  x: '36'
+                  'y': '8'
+                  width: '36'
+                  height: '7'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: 1A7C11
+                    - type: STRING
+                      name: ds.0.hosts.0
+                      value: 'Proxmox Backup Server by HTTP'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Memory used'
+                    - type: STRING
+                      name: ds.1.color
+                      value: FF9800
+                    - type: STRING
+                      name: ds.1.hosts.0
+                      value: 'Proxmox Backup Server by HTTP'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Swap used'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '2'
+                    - type: STRING
+                      name: reference
+                      value: SGMEM
+                - type: graphprototype
+                  name: 'Datastore backups'
+                  x: '36'
+                  'y': '15'
+                  width: '36'
+                  height: '8'
+                  fields:
+                    - type: INTEGER
+                      name: columns
+                      value: '1'
+                    - type: GRAPH_PROTOTYPE
+                      name: graphid.0
+                      value:
+                        host: 'Proxmox Backup Server by HTTP'
+                        name: 'Datastore [{#DATASTORE}]: Backups'
+                    - type: STRING
+                      name: reference
+                      value: AAAAD
+                - type: honeycomb
+                  name: 'Datastore usage'
+                  x: '48'
+                  'y': '3'
+                  width: '24'
+                  height: '5'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'Datastore *: Used percentage'
+                    - type: STRING
+                      name: reference
+                      value: HCDS
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: 4CAF50
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: FF9800
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '80'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: F44336
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '90'
+                - type: item
+                  name: Kernel
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'Proxmox Backup Server by HTTP'
+                        key: pbs.node.kernel
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+      valuemaps:
+        - uuid: 485ce7b5188a46f48e0d5b541c8eb0dd
+          name: 'HTTP response status code'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '200'
+              newvalue: OK
+            - value: '400'
+              newvalue: 'Bad Request'
+            - value: '401'
+              newvalue: Unauthorized
+            - value: '403'
+              newvalue: Forbidden
+            - value: '404'
+              newvalue: 'Not Found'
+            - value: '500'
+              newvalue: 'Internal Server Error'
+            - value: '502'
+              newvalue: 'Bad Gateway'
+            - value: '503'
+              newvalue: 'Service Unavailable'
+            - value: '504'
+              newvalue: 'Gateway Timeout'
+            - value: '520'
+              newvalue: 'Unknown Error'

@@ -1,0 +1,399 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 6b96c6e8e734474ab417c8777ee1ef1a
+      template: 'ClamAV by Zabbix agent'
+      name: 'ClamAV by Zabbix agent'
+      description: |
+        # Overview
+
+        Freshness check of the ClamAV signature database, read through a Zabbix agent
+        UserParameter.
+
+        One agent item returns the plain-text database info, a JavaScript step turns it into
+        JSON, and the individual fields - build time, version, signature count and the result
+        of the signature verification - are pulled out of it by dependent items.
+
+        ## Requirements
+
+        Zabbix version: 7.0 and higher.
+        A UserParameter named `clamav.status` on the monitored host.
+
+        ## Setup
+
+        1. Put the shipped `clamav.conf` into the agent's include directory
+           (zabbix_agentd.d or zabbix_agent2.d) and restart the agent. It defines the
+           `clamav.status` UserParameter, which prints `sigtool --info` of the daily database -
+           daily.cld when freshclam has already switched to the incremental file, daily.cvd
+           otherwise. Step-by-step commands are in the README next to this template.
+
+        2. The agent has to be able to read that file. On most distributions the zabbix user
+           is not in the clamav group, so either add it or relax the permissions.
+
+        3. Link the template to the host. The host needs a Zabbix agent interface, because the
+           master item is a passive agent check.
+
+        4. Review {$CLAMAV.UPDATE.WARN} (3d), {$CLAMAV.UPDATE.HIGH} (7d) and {$CLAMAV.NODATA} (3h).
+
+        ## Notes
+
+        Expected input - the parser only looks at lines shaped as "key: value":
+
+            File: daily.cvd
+            Build time: 22 Jan 2026 07:25 +0000
+            Version: 27500
+            Signatures: 2050000
+            Functionality level: 90
+            Builder: raynman
+            Verification OK.
+
+        The last line has no colon, which is why a STR_REPLACE step puts one there before the
+        JavaScript runs.
+
+        Every "key: value" line ends up in the JSON, so a field that no item uses today - File,
+        Functionality level, Builder, MD5, Digital signature - is still available for a new
+        dependent item without touching the collector.
+
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 4fc01f68e4f6468e873b5aecc48490ad
+          name: 'ClamAV: Database build time'
+          type: DEPENDENT
+          key: clamav.build.time
+          delay: '0'
+          units: unixtime
+          description: |
+            When the installed signature database was built by ClamAV - not when it was
+            downloaded.
+
+            This is what the two staleness triggers watch. A database that stops advancing
+            means freshclam is no longer updating, even though clamd itself keeps running
+            happily.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Build time"]'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+          triggers:
+            - uuid: 487f6b4a42a748d1b6a99b4dfdef03fd
+              expression: 'now() - last(/ClamAV by Zabbix agent/clamav.build.time) > {$CLAMAV.UPDATE.WARN}'
+              name: 'ClamAV: Signature database is older than {$CLAMAV.UPDATE.WARN}'
+              priority: WARNING
+              description: |
+                The signature database has not been rebuilt for {$CLAMAV.UPDATE.WARN}.
+
+                ClamAV normally publishes daily, so this points at freshclam: a stopped
+                service, a blocked outbound connection to the mirrors, or a full disk.
+
+                Build time: {ITEM.VALUE}
+              dependencies:
+                - name: 'ClamAV: Signature database is older than {$CLAMAV.UPDATE.HIGH}'
+                  expression: 'now() - last(/ClamAV by Zabbix agent/clamav.build.time) > {$CLAMAV.UPDATE.HIGH}'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: security
+            - uuid: ac6dda9ed410434f82e2e755839dabe1
+              expression: 'now() - last(/ClamAV by Zabbix agent/clamav.build.time) > {$CLAMAV.UPDATE.HIGH}'
+              name: 'ClamAV: Signature database is older than {$CLAMAV.UPDATE.HIGH}'
+              priority: HIGH
+              description: |
+                The signature database has not been rebuilt for {$CLAMAV.UPDATE.HIGH}. At this
+                age the scanner is missing more than a week of signatures.
+
+                The warning trigger depends on this one, so only this problem is shown once
+                the database is this old.
+
+                Build time: {ITEM.VALUE}
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: b22b6c3cffca40219a036dfa69b0a138
+          name: 'ClamAV: Signatures'
+          type: DEPENDENT
+          key: clamav.signatures
+          delay: '0'
+          units: '!'
+          description: |
+            Number of signatures in the database.
+
+            The unit is "!" so that Zabbix prints 2050000 instead of 2.05M - a signature count
+            is not a quantity that benefits from a prefix.
+
+            No trigger watches this item today, although a sudden drop is a good indicator of
+            a truncated or replaced database.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Signatures"]'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+        - uuid: 2dea09861695481086c22e647687e21f
+          name: 'ClamAV: Database info RAW'
+          key: clamav.status
+          delay: '{$CLAMAV.INTERVAL}'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: |
+            Plain-text output of the ClamAV database info command, converted to JSON.
+
+            Master item of the whole template. Requires the clamav.status UserParameter on the
+            agent, see the template description.
+
+            Two preprocessing steps run here:
+
+            - STR_REPLACE turns the "Verification OK." line into "Verification: OK." so that it
+              has the same shape as every other line.
+            - The JavaScript splits each line on the first ": ", converts numeric values to
+              numbers and rewrites "Build time" from "22 Jan 2026 07:25 +0000" into Unix time.
+
+            It fails with a readable message when the command returns nothing, and it drops
+            an unreadable "Build time" instead of failing, so that the remaining fields still
+            reach their items.
+
+            History is off - nothing reads it, the dependent items are fed from the incoming
+            value. For the same reason no trigger can be attached here: values of an item with
+            history 0 never reach the value cache, so nodata() would report a permanent
+            outage.
+          preprocessing:
+            - type: STR_REPLACE
+              parameters:
+                - Verification
+                - 'Verification:'
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function parseBuildTime(dateStr) {
+                      // "22 Jan 2026 07:25 +0000" -> unixtime. Returns null when that fails, so that
+                      // one broken line does not take the whole item down.
+                      if (dateStr === undefined || dateStr === null) {
+                          return null;
+                      }
+
+                      var months = {
+                          "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
+                          "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
+                      };
+
+                      var parts = String(dateStr).replace(/\s+/g, ' ').trim().split(' ');
+                      if (parts.length < 4) {
+                          return null;
+                      }
+
+                      var day = parseInt(parts[0], 10);
+                      var month = months[parts[1]];
+                      var year = parseInt(parts[2], 10);
+
+                      var timeParts = parts[3].split(':');
+                      var hours = parseInt(timeParts[0], 10);
+                      var minutes = parseInt(timeParts[1], 10);
+                      var seconds = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
+
+                      if (month === undefined || isNaN(day) || isNaN(year) || isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
+                          return null;
+                      }
+
+                      // Offset from UTC; sigtool writes +0000. Missing or unreadable means UTC.
+                      var offset = 0;
+                      if (parts.length > 4) {
+                          var tz = /^([+-])(\d{2})(\d{2})$/.exec(parts[4]);
+                          if (tz !== null) {
+                              offset = (tz[1] === '-' ? -1 : 1) * (Number(tz[2]) * 3600 + Number(tz[3]) * 60);
+                          }
+                      }
+
+                      return Math.floor(Date.UTC(year, month, day, hours, minutes, seconds) / 1000) - offset;
+                  }
+
+                  function kvToJson(text) {
+                      var obj = {};
+                      var lines = String(text).split(/\r?\n/);
+
+                      for (var i = 0; i < lines.length; i++) {
+                          var line = lines[i].trim();
+                          if (line.length === 0) {
+                              continue;
+                          }
+
+                          // Split on the FIRST ": " only - the value may contain a colon itself.
+                          var sep = line.indexOf(': ');
+                          if (sep < 1) {
+                              continue;
+                          }
+
+                          var key = line.substring(0, sep).trim();
+                          var value = line.substring(sep + 2).trim();
+
+                          // Numeric values become Number; an empty string is not a number.
+                          if (value !== '' && !isNaN(value)) {
+                              value = Number(value);
+                          }
+
+                          obj[key] = value;
+                      }
+
+                      if (Object.keys(obj).length === 0) {
+                          throw 'ClamAV database info is empty or has no "key: value" lines. Check the clamav.status ' +
+                              'UserParameter and that the agent can read the signature database.';
+                      }
+
+                      var buildTime = parseBuildTime(obj["Build time"]);
+
+                      if (buildTime === null) {
+                          // The date is missing or unreadable - drop it and let the other fields through.
+                          delete obj["Build time"];
+                      }
+                      else {
+                          obj["Build time"] = buildTime;
+                      }
+
+                      return JSON.stringify(obj);
+                  }
+
+                  return kvToJson(value);
+          tags:
+            - tag: raw
+        - uuid: 4c76761f9a1c4f46b2f0bb9e37e054fe
+          name: 'ClamAV: Database verification'
+          type: DEPENDENT
+          key: clamav.verification
+          delay: '0'
+          trends: '0'
+          value_type: UNSIGNED
+          valuemap:
+            name: '0 OK, 1 Fail'
+          description: |
+            Result of the digital signature check of the database, shown through the
+            "0 OK, 1 Fail" value map.
+
+            The JavaScript compares the raw text against "OK." exactly - anything else,
+            an empty value included, is reported as FAIL.
+
+            A failed verification means the database cannot be trusted, which the trigger on
+            this item reports.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Verification"]'
+            - type: JAVASCRIPT
+              parameters:
+                - 'if ( value == "OK." ) { return "0"} else {return "1"};'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+          triggers:
+            - uuid: 4c7252c86ae243e99e06103c2a368bd2
+              expression: 'last(/ClamAV by Zabbix agent/clamav.verification)=1'
+              name: 'ClamAV: Signature database failed verification'
+              priority: HIGH
+              description: |
+                The digital signature of the signature database did not verify, so ClamAV
+                cannot trust the database it is scanning with.
+
+                Usual causes: a truncated or corrupted download, a database file that was
+                edited or replaced by hand, or a disk problem. Let freshclam fetch the
+                database again - stop clamav-freshclam, delete the database file and start it
+                back up.
+
+                Anything other than the literal "OK." reported by the tool ends up here,
+                including an empty value.
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: d6550f75294042f38c687bc7c699d016
+          name: 'ClamAV: Database version'
+          type: DEPENDENT
+          key: clamav.version
+          delay: '0'
+          units: '!'
+          description: |
+            Version number of the signature database as published by ClamAV. It goes up with
+            every rebuild, so it moves together with "ClamAV: Database build time".
+
+            This is not the version of the clamd binary.
+
+            The unit is "!" to keep Zabbix from displaying 27500 as 27.5K.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Version"]'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+          triggers:
+            - uuid: 89e982588e694e37b53540e3b6dfb26d
+              expression: 'nodata(/ClamAV by Zabbix agent/clamav.version,{$CLAMAV.NODATA})=1'
+              name: 'ClamAV: No data collected for {$CLAMAV.NODATA}'
+              priority: WARNING
+              description: |
+                The database info has not arrived for {$CLAMAV.NODATA}, so the freshness and
+                verification triggers are blind.
+
+                Usual causes: the clamav.status UserParameter is missing or the agent was not
+                restarted after adding it, sigtool is not installed, the zabbix user cannot read
+                the signature database, or the agent is unreachable.
+
+                The trigger sits on a dependent item on purpose: the master item keeps no
+                history, so nodata() could never see its values.
+              tags:
+                - tag: scope
+                  value: availability
+      macros:
+        - macro: '{$CLAMAV.INTERVAL}'
+          value: 1h
+          description: |
+            How often the database info is read.
+
+            ClamAV rebuilds the database a few times a day at most, so there is nothing to
+            gain from a shorter interval - and every check starts a process on the host.
+        - macro: '{$CLAMAV.NODATA}'
+          value: 3h
+          description: |
+            How long the database info may be missing before the no-data trigger fires.
+
+            Keep it at a few multiples of {$CLAMAV.INTERVAL}.
+        - macro: '{$CLAMAV.UPDATE.HIGH}'
+          value: 7d
+          description: |
+            Age of the signature database at which the HIGH trigger fires.
+
+            Should be larger than {$CLAMAV.UPDATE.WARN}. Zabbix time suffixes are accepted, so
+            7d, 168h and 604800 all mean the same thing.
+        - macro: '{$CLAMAV.UPDATE.WARN}'
+          value: 3d
+          description: |
+            Age of the signature database at which the WARNING trigger fires.
+
+            Zabbix time suffixes are accepted, so 3d, 72h and 259200 all mean the same thing.
+      valuemaps:
+        - uuid: b8fc2a30c2274f0984fe71599f567780
+          name: '0 OK, 1 Fail'
+          mappings:
+            - value: '0'
+              newvalue: OK
+            - value: '1'
+              newvalue: FAIL

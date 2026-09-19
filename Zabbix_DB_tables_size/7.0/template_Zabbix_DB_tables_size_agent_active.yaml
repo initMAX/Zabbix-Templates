@@ -1,0 +1,458 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 2b05f7a8e3174ab88e6041cb801e700f
+      template: 'initMAX - Zabbix DB tables size by Zabbix agent active'
+      name: 'initMAX - Zabbix DB tables size by Zabbix agent active'
+      description: |
+        Template for monitoring large Zabbix database tables using PostgreSQL queries. Discovers and monitors tables larger than {$TABLES.SIZE} MB (default: 10MB) with automatic filtering, dependent item processing, and included dashboard visualization.
+        
+        Supports both regular tables and TimescaleDB hypertables with configurable PostgreSQL connection parameters and optimized preprocessing for efficient monitoring.
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-3
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 2994a1ea5aaf4ba58af92f95cdc2f3fe
+          name: 'DB [zabbix] tables raw'
+          type: ZABBIX_ACTIVE
+          key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+          delay: 15m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          tags:
+            - tag: template
+              value: 'Zabbix DB tables size'
+            - tag: RAW
+        - uuid: f034ad8dbfd14a33a00db382d8419f9f
+          name: 'DB [zabbix] all tables count'
+          tags:
+            - tag: template
+              value: 'Zabbix DB tables size'
+          type: DEPENDENT
+          key: tables.count
+          delay: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Parse JSON data
+                  var data = JSON.parse(value);
+                  
+                  // Count number of tables
+                  var tableCount = data.length;
+                  
+                  // Return result
+                  return tableCount;
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+        - uuid: 82a37c94ff994e7284d16434d5a20b09
+          name: 'DB [zabbix] filtered tables count (larger than "x"MB)'
+          tags:
+            - tag: template
+              value: 'Zabbix DB tables size'
+          type: DEPENDENT
+          key: 'tables.count[10000000]'
+          delay: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Parse JSON data
+                  var data = JSON.parse(value);
+
+                  // Count filtered tables (excluding the "other" aggregate)
+                  var tableCount = data.filter(function(table) {
+                      return table.tablename !== 'other';
+                  }).length;
+
+                  // Return result
+                  return tableCount;
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: tables.filtered
+        - uuid: 84ea52fd2a71468cb3b866581f90edf6
+          name: 'DB [zabbix] tables filtered'
+          type: DEPENDENT
+          key: tables.filtered
+          delay: '0'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Parse JSON data
+                  var data = JSON.parse(value);
+
+                  // Use Zabbix macro {$TABLES.SIZE} in MB
+                  var thresholdBytes = {$TABLES.SIZE} * 1024 * 1024;
+
+                  // Keep tables above the threshold; sum the rest into "other"
+                  var filteredTables = [];
+                  var otherBytes = 0;
+                  for (var i = 0; i < data.length; i++) {
+                      var sz = parseInt(data[i].size_bytes);
+                      if (isNaN(sz)) {
+                          continue;
+                      }
+                      if (sz > thresholdBytes) {
+                          filteredTables.push({
+                              tablename: data[i].tablename,
+                              is_hypertable: data[i].is_hypertable,
+                              size_bytes: data[i].size_bytes
+                          });
+                      } else {
+                          otherBytes += sz;
+                      }
+                  }
+
+                  // Append aggregate of all sub-threshold tables
+                  filteredTables.push({
+                      tablename: 'other',
+                      is_hypertable: 'false',
+                      size_bytes: '' + otherBytes
+                  });
+
+                  // Return cleaned JSON
+                  return JSON.stringify(filteredTables);
+          master_item:
+            key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+          tags:
+            - tag: template
+              value: 'Zabbix DB tables size'
+            - tag: RAW
+      discovery_rules:
+        - uuid: 80d6de1a93da48749d783b2f5ef2b364
+          name: 'Tables discovery'
+          type: DEPENDENT
+          key: tables.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: ff7c6496923245f1bd2ea2ec71a02566
+              name: 'DB [zabbix] - {#TABLE.NAME} size'
+              tags:
+                - tag: template
+                  value: 'Zabbix DB tables size'
+              type: DEPENDENT
+              key: 'table.size[{#TABLE.NAME}]'
+              delay: '0'
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.tablename == ''{#TABLE.NAME}'')].size_bytes.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: tables.filtered
+            - uuid: d126fb220e2e422e9aaa77afd5855152
+              name: 'DB [zabbix] - {#TABLE.NAME} size (compressed)'
+              tags:
+                - tag: template
+                  value: 'Zabbix DB tables size'
+              type: DEPENDENT
+              key: 'table.size.compressed[{#TABLE.NAME}]'
+              delay: '0'
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.tablename == ''{#TABLE.NAME}'')].compressed_bytes.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+            - uuid: 50d15fdf8ae347bcadcdb3c796de0f57
+              name: 'DB [zabbix] - {#TABLE.NAME} size (uncompressed)'
+              tags:
+                - tag: template
+                  value: 'Zabbix DB tables size'
+              type: DEPENDENT
+              key: 'table.size.uncompressed[{#TABLE.NAME}]'
+              delay: '0'
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.tablename == ''{#TABLE.NAME}'')].uncompressed_bytes.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+            - uuid: c0f7497b04024ed98e1b473db5348a72
+              name: 'DB [zabbix] - {#TABLE.NAME} chunks total'
+              tags:
+                - tag: template
+                  value: 'Zabbix DB tables size'
+              type: DEPENDENT
+              key: 'table.chunks[{#TABLE.NAME}]'
+              delay: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.tablename == ''{#TABLE.NAME}'')].chunks_total.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+            - uuid: f831bab50a314df0acabb5cccae66a1a
+              name: 'DB [zabbix] - {#TABLE.NAME} chunks compressed'
+              tags:
+                - tag: template
+                  value: 'Zabbix DB tables size'
+              type: DEPENDENT
+              key: 'table.chunks.compressed[{#TABLE.NAME}]'
+              delay: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.tablename == ''{#TABLE.NAME}'')].chunks_compressed.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+            - uuid: c060b8dd65f84f84bcfdae94517a9ece
+              name: 'DB [zabbix] - {#TABLE.NAME} chunks uncompressed'
+              tags:
+                - tag: template
+                  value: 'Zabbix DB tables size'
+              type: DEPENDENT
+              key: 'table.chunks.uncompressed[{#TABLE.NAME}]'
+              delay: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.tablename == ''{#TABLE.NAME}'')].chunks_uncompressed.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'pgsql.custom.query["{$TABLES.PG.CONNSTRING}","{$TABLES.PG.USER}","{$TABLES.PG.PASSWORD}","{$TABLES.PG.DATABASE}","zbxdb_tables"]'
+          master_item:
+            key: tables.filtered
+          lld_macro_paths:
+            - lld_macro: '{#TABLE.IS.HYPERTABLE}'
+              path: $.is_hypertable
+            - lld_macro: '{#TABLE.NAME}'
+              path: $.tablename
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          overrides:
+            - name: 'is hypertable'
+              step: '1'
+              filter:
+                conditions:
+                  - macro: '{#TABLE.IS.HYPERTABLE}'
+                    value: 'true'
+                    formulaid: A
+              operations:
+                - operationobject: ITEM_PROTOTYPE
+                  operator: REGEXP
+                  value: '.*'
+                  tags:
+                    - tag: is_hypertable
+            - name: 'not hypertable - hide split and chunk items'
+              step: '2'
+              filter:
+                conditions:
+                  - macro: '{#TABLE.IS.HYPERTABLE}'
+                    value: 'false'
+                    formulaid: A
+              operations:
+                - operationobject: ITEM_PROTOTYPE
+                  operator: REGEXP
+                  value: 'size \(|chunks'
+                  discover: NO_DISCOVER
+            - name: 'split disabled - hide split sizes'
+              step: '3'
+              filter:
+                evaltype: AND
+                conditions:
+                  - macro: '{#TABLE.IS.HYPERTABLE}'
+                    operator: MATCHES_REGEX
+                    value: '^true$'
+                    formulaid: A
+                  - macro: '{#TABLE.IS.HYPERTABLE}'
+                    operator: NOT_MATCHES_REGEX
+                    value: '{$TABLES.SPLIT.COMPRESSION}'
+                    formulaid: B
+              operations:
+                - operationobject: ITEM_PROTOTYPE
+                  operator: REGEXP
+                  value: 'size \('
+                  discover: NO_DISCOVER
+      macros:
+        - macro: '{$TABLES.PG.CONNSTRING}'
+          value: 'tcp://localhost:5432'
+          description: 'URI or named session of the PostgreSQL instance.'
+        - macro: '{$TABLES.PG.DATABASE}'
+          value: zabbix
+          description: 'Default PostgreSQL database for the connection.'
+        - macro: '{$TABLES.PG.PASSWORD}'
+          description: 'PostgreSQL user password.'
+        - macro: '{$TABLES.PG.USER}'
+          description: 'PostgreSQL username.'
+        - macro: '{$TABLES.SIZE}'
+          value: '10'
+          description: 'Only tables grater than "x" MB'
+        - macro: '{$TABLES.SPLIT.COMPRESSION}'
+          value: 'false'
+          description: 'Set to "true" to additionally collect separate compressed / uncompressed chunk size items for hypertables. The combined total size item is always kept. Any other value collects only the combined size (default).'
+      dashboards:
+        - uuid: 17c7e2bbec1f4f1883019a117300c2c9
+          name: 'Zabbix DB table size'
+          auto_start: 'NO'
+          pages:
+            - widgets:
+                - type: piechart
+                  name: 'Total Chunks size per Hypertable'
+                  width: '25'
+                  height: '9'
+                  fields:
+                    - type: INTEGER
+                      name: draw_type
+                      value: '1'
+                    - type: STRING
+                      name: ds.0.color
+                      value: FF465C
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'DB [zabbix] - * size'
+                    - type: INTEGER
+                      name: legend
+                      value: '0'
+                    - type: INTEGER
+                      name: total_show
+                      value: '1'
+                    - type: STRING
+                      name: units
+                      value: B
+                    - type: INTEGER
+                      name: units_show
+                      value: '1'
+                    - type: INTEGER
+                      name: value_bold
+                      value: '1'
+                - type: svggraph
+                  x: '25'
+                  width: '47'
+                  height: '9'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: 0040FF
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'DB [zabbix] - * size'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '0'
+                    - type: INTEGER
+                      name: ds.0.width
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '10'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: HTSBO
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: svggraph
+                  name: 'Compressed vs Uncompressed chunks per Hypertable'
+                  'y': '9'
+                  width: '72'
+                  height: '9'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: 0040FF
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '5'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'DB [zabbix] - * size (compressed)'
+                    - type: INTEGER
+                      name: ds.0.stacked
+                      value: '1'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '3'
+                    - type: INTEGER
+                      name: ds.0.width
+                      value: '2'
+                    - type: STRING
+                      name: ds.1.color
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '5'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'DB [zabbix] - * size (uncompressed)'
+                    - type: INTEGER
+                      name: ds.1.stacked
+                      value: '1'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '3'
+                    - type: INTEGER
+                      name: ds.1.width
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '10'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: CMPUC
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tables size'
+                  'y': '18'
+                  width: '72'
+                  height: '9'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'DB [zabbix] - * size'
+                    - type: STRING
+                      name: primary_label
+                      value: '{ITEM.NAME}'

@@ -1,0 +1,4573 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 456edad020014c4b9e0c48dcec18f64b
+      template: 'BambuLab by Zabbix agent2 MQTT'
+      name: 'BambuLab by Zabbix agent2 (MQTT)'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: cac2b58b5ef14042975558669148847a
+          name: 'BambuLab: Active AMS tray (tray_now)'
+          type: DEPENDENT
+          key: bambulab.ams.tray_now
+          delay: '0'
+          description: |
+            Active filament tray index (tray_now).
+            
+            Common mapping:
+            - tray_now = ams_id*4 + tray_id
+            - 255 means no active tray
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function safeParse(s) {
+                    if (s === null || s === undefined) return null;
+                    s = String(s).replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+                    var start = s.indexOf('{');
+                    var end = s.lastIndexOf('}');
+                    if (start === -1 || end === -1 || end <= start) return null;
+                    try { return JSON.parse(s.substring(start, end + 1)); } catch (e) { return null; }
+                  }
+                  var j = safeParse(value);
+                  if (!j || !j.print) return null;
+                  var p = j.print;
+                  var v = null;
+                  if (p.ams && p.ams.tray_now !== undefined && p.ams.tray_now !== null) v = p.ams.tray_now;
+                  else if (p.tray_now !== undefined && p.tray_now !== null) v = p.tray_now;
+                  else if (j.tray_now !== undefined && j.tray_now !== null) v = j.tray_now;
+                  var n = parseInt(v, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: ams
+        - uuid: c151b04d896f4f62aa83a1fad652da4e
+          name: 'BambuLab: Active AMS tray (text)'
+          type: DEPENDENT
+          key: bambulab.ams.tray_now.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable label derived from tray_now (e.g. "AMS 0 Tray 3" or "None").'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  if (n === 255) return 'None';
+                  if (n < 0) return 'unknown';
+                  var amsId = Math.floor(n / 4);
+                  var trayId = n % 4;
+                  return 'AMS ' + String(amsId) + ' Tray ' + String(trayId);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: bambulab.ams.tray_now
+          tags:
+            - tag: component
+              value: ams
+        - uuid: 10c95df6f0bb4ec499a1733fb752c43d
+          name: 'BambuLab: Bed target temperature'
+          type: DEPENDENT
+          key: bambulab.bed.target_temperature
+          delay: '0'
+          value_type: FLOAT
+          units: °C
+          description: 'Target bed temperature from $.print.bed_target_temper.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.bed_target_temper
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: temperature
+        - uuid: 57ac0c4e24544978b2ecd8c282ef482d
+          name: 'BambuLab: Bed temperature'
+          type: DEPENDENT
+          key: bambulab.bed.temperature
+          delay: '0'
+          value_type: FLOAT
+          units: °C
+          description: 'Current bed temperature from $.print.bed_temper.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.bed_temper
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: temperature
+        - uuid: 2edb44aa5c40438692b35fbd74ef9332
+          name: 'BambuLab: Camera recording'
+          type: DEPENDENT
+          key: bambulab.camera.recording
+          delay: '0'
+          description: 'Camera recording flag derived from home_flag (bit 0x00000020).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  n = (n >>> 0);
+                  return ((n & 0x00000020) !== 0) ? 1 : 0;
+          master_item:
+            key: bambulab.home_flag
+          tags:
+            - tag: component
+              value: availability
+        - uuid: d6ed0111a0c04ea99269c6926a6022fb
+          name: 'BambuLab: Door open'
+          type: DEPENDENT
+          key: bambulab.door_open
+          delay: '0'
+          description: |
+            Door open flag derived from home_flag (bit 0x00800000).
+            
+            Note: availability depends on model/firmware.
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  return ((n & 0x00800000) !== 0) ? 1 : 0;
+          master_item:
+            key: bambulab.home_flag
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 6fed14e0243745fa99df74621f7aee63
+          name: 'BambuLab: Door open (text)'
+          type: DEPENDENT
+          key: bambulab.door_open.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable door state derived from Door open.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  return (n === 1) ? 'Open' : 'Closed';
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: bambulab.door_open
+          tags:
+            - tag: component
+              value: availability
+        - uuid: d27a88e18a67479d96fa8723e9f2eaed
+          name: 'BambuLab: Error code (err)'
+          type: DEPENDENT
+          key: bambulab.err
+          delay: '0'
+          description: 'Printer error code from $.print.err (parsed as integer).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.err
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+          triggers:
+            - uuid: 1cb2d0fd00f04ad1a5e2c5a122b020d9
+              expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.err)<>0'
+              name: 'BambuLab: Printer error code (err)'
+              priority: AVERAGE
+              description: 'Printer error code (err) is non-zero.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 8444fabf8b8c4af7aa8b8e55a10277f4
+          name: 'BambuLab: Fail reason'
+          type: DEPENDENT
+          key: bambulab.fail_reason
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Failure reason / code string from $.print.fail_reason (often \"0\" when OK).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.fail_reason
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 17d1186926864bf087320fe3877ef06a
+          name: 'BambuLab: Aux part fan'
+          type: DEPENDENT
+          key: bambulab.fan.aux_part
+          delay: '0'
+          description: 'Auxiliary part cooling fan flag from $.print.aux_part_fan (0/1).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.aux_part_fan
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  if (value === true || value === 'true' || value === 1 || value === '1') return 1;
+                  if (value === false || value === 'false' || value === 0 || value === '0') return 0;
+                  return null;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: fan
+        - uuid: 7357ed48dbfa4c0ea1c3bb3870393f1f
+          name: 'BambuLab: Big fan 1 speed'
+          type: DEPENDENT
+          key: bambulab.fan.big1_speed
+          delay: '0'
+          units: '%'
+          description: |
+            Big fan 1 speed in percent (0–100%).
+            
+            Bambu reports $.print.big_fan1_speed as a 0–15 level; the template maps it to percent.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.big_fan1_speed
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  var pct = Math.ceil((n / 15) * 10) * 10;
+                  if (pct < 0) pct = 0;
+                  if (pct > 100) pct = 100;
+                  return pct;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: fan
+        - uuid: d3fa6a79467548e3a7aa8b4665b9561c
+          name: 'BambuLab: Big fan 2 speed'
+          type: DEPENDENT
+          key: bambulab.fan.big2_speed
+          delay: '0'
+          units: '%'
+          description: |
+            Big fan 2 speed in percent (0–100%).
+            
+            Bambu reports $.print.big_fan2_speed as a 0–15 level; the template maps it to percent.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.big_fan2_speed
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  var pct = Math.ceil((n / 15) * 10) * 10;
+                  if (pct < 0) pct = 0;
+                  if (pct > 100) pct = 100;
+                  return pct;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: fan
+        - uuid: 27e04ef81b004d88a625e9d0b8d502e3
+          name: 'BambuLab: Cooling fan speed'
+          type: DEPENDENT
+          key: bambulab.fan.cooling_speed
+          delay: '0'
+          units: '%'
+          description: |
+            Part cooling fan speed in percent (0–100%).
+            
+            Bambu reports $.print.cooling_fan_speed as a 0–15 level; the template maps it to percent.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.cooling_fan_speed
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  var pct = Math.ceil((n / 15) * 10) * 10;
+                  if (pct < 0) pct = 0;
+                  if (pct > 100) pct = 100;
+                  return pct;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: fan
+        - uuid: d31418f0f32b455ba5b4b88f0f639047
+          name: 'BambuLab: Heatbreak fan speed'
+          type: DEPENDENT
+          key: bambulab.fan.heatbreak_speed
+          delay: '0'
+          units: '%'
+          description: |
+            Heatbreak fan speed in percent (0–100%).
+            
+            Bambu reports $.print.heatbreak_fan_speed as a 0–15 level; the template maps it to percent.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.heatbreak_fan_speed
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  var pct = Math.ceil((n / 15) * 10) * 10;
+                  if (pct < 0) pct = 0;
+                  if (pct > 100) pct = 100;
+                  return pct;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: fan
+        - uuid: 04fd173b5ce1472793e4a27ba8c42c6f
+          name: 'BambuLab: Filament tangle detected'
+          type: DEPENDENT
+          key: bambulab.filament.tangle_detected
+          delay: '0'
+          description: |
+            Filament tangle detected flag derived from home_flag (bit 0x00100000).
+            
+            Note: availability depends on model/firmware and feature support.
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  n = (n >>> 0);
+                  return ((n & 0x00100000) !== 0) ? 1 : 0;
+          master_item:
+            key: bambulab.home_flag
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 15efc1c5c4fa4e1a8e92be5913eb3d2d
+          name: 'BambuLab: Filament tangle support'
+          type: DEPENDENT
+          key: bambulab.filament.tangle_supported
+          delay: '0'
+          description: 'Feature support flag derived from home_flag (bit 0x00080000).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  n = (n >>> 0);
+                  return ((n & 0x00080000) !== 0) ? 1 : 0;
+          master_item:
+            key: bambulab.home_flag
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 26bd7b6edb0b48c9803d24be29f66cc6
+          name: 'BambuLab: G-code file'
+          type: DEPENDENT
+          key: bambulab.gcode_file
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Path to the current G-code file from $.print.gcode_file.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.gcode_file
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: b10d087e1d32462c93fa4152180bfc5e
+          name: 'BambuLab: G-code state'
+          type: DEPENDENT
+          key: bambulab.gcode_state
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Current job state string from $.print.gcode_state (e.g. RUNNING/IDLE/FAILED/FINISH).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.gcode_state
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+          triggers:
+            - uuid: 7c1a7c94a9e7490c9f41dd0124fb7a48
+              expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.gcode_state)="FAILED"'
+              name: 'BambuLab: Print failed'
+              priority: HIGH
+              description: 'Printer reports FAILED state for current job.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: ec533a58adc24dccb9143b019cd375b2
+          name: 'BambuLab: Raw status (MQTT JSON)'
+          key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          delay: '{$BAMBU_INTERVAL}'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Fetch one MQTT status message from device/<SN>/report and return the raw JSON payload.'
+          timeout: '{$BAMBU_TIMEOUT}'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 4b2d5537db314649b5b3f8b1dd9acf64
+          name: 'BambuLab: Home flag'
+          type: DEPENDENT
+          key: bambulab.home_flag
+          delay: '0'
+          description: |
+            Internal bitfield from the printer (one number contains multiple flags).
+            
+            The value may be negative in the MQTT payload; the template converts it to an unsigned 32-bit integer.
+            Used mainly as a source for derived diagnostic flags (e.g. wired_flag).
+            
+            Note: most bits are not officially documented and may differ by model/firmware.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.home_flag
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  if (n < 0) n = 4294967296 + n;
+                  return n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: network
+        - uuid: e0f80c1a80b9468ebd3e31aa179f533f
+          name: 'BambuLab: Is printing'
+          type: DEPENDENT
+          key: bambulab.is_printing
+          delay: '0'
+          description: 'Derived boolean: 1 when Print stage == 2, otherwise 0.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 0;
+                  return (n === 2) ? 1 : 0;
+          master_item:
+            key: bambulab.mc_print_stage
+          tags:
+            - tag: component
+              value: print
+        - uuid: f7883503f5644aac8e3848640d7190de
+          name: 'BambuLab: Job ID'
+          type: DEPENDENT
+          key: bambulab.job_id
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Current job ID from $.print.job_id.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.job_id
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 497f326fe38242babfc81b1e08b2a6bd
+          name: 'BambuLab: Last failure snapshot'
+          type: DEPENDENT
+          key: bambulab.last_failure.snapshot
+          delay: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'One-line summary built from gcode_state, fail_reason, file, profile and job_id.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  try {
+                    var s = (value === null || value === undefined) ? '' : String(value);
+                    s = s.replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+                    var start = s.indexOf('{');
+                    var end = s.lastIndexOf('}');
+                    if (start === -1 || end === -1 || end <= start) return '';
+                    var j = JSON.parse(s.substring(start, end + 1));
+                    var p = (j && j.print) ? j.print : {};
+                    function pick(obj, key) {
+                      var v = obj ? obj[key] : null;
+                      return (v === null || v === undefined) ? '' : v;
+                    }
+                    var gcodeState = pick(p, 'gcode_state');
+                    var failReason = pick(p, 'fail_reason');
+                    var file = pick(p, 'gcode_file');
+                    if (file === '') file = pick(p, 'file');
+                    var profile = pick(p, 'subtask_name');
+                    var jobId = pick(p, 'job_id');
+                    return [
+                      'gcode_state=' + gcodeState,
+                      'fail_reason=' + failReason,
+                      'file=' + file,
+                      'profile=' + profile,
+                      'job_id=' + jobId
+                    ].join(' | ');
+                  } catch (e) {
+                    return '';
+                  }
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 7a3e044631814320aa8d9da69c6d648e
+          name: 'BambuLab: Current layer'
+          type: DEPENDENT
+          key: bambulab.layer.current
+          delay: '0'
+          description: 'Current layer number from $.print.layer_num.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.layer_num
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: e5bb10bb329e43dfa7f3d0abee4dc0c3
+          name: 'BambuLab: Total layers'
+          type: DEPENDENT
+          key: bambulab.layer.total
+          delay: '0'
+          description: 'Total layer count from $.print.total_layer_num.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.total_layer_num
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: bde99164fe8b42a58473df57c8307472
+          name: 'BambuLab: Print stage'
+          type: DEPENDENT
+          key: bambulab.mc_print_stage
+          delay: '0'
+          description: 'High-level print stage from $.print.mc_print_stage.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.mc_print_stage
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 69d3241bbb3443a1b810d21be95ab346
+          name: 'BambuLab: Print stage (text)'
+          type: DEPENDENT
+          key: bambulab.mc_print_stage.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: |
+            Human-readable print stage derived from 'Print stage'.
+            
+            Common interpretation:
+            - 1 = Idle/Standby
+            - 2 = Active print (prepare/running)
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  if (n === 1) return 'Idle/Standby';
+                  if (n === 2) return 'Active print';
+                  return 'stage_' + String(n);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          master_item:
+            key: bambulab.mc_print_stage
+          tags:
+            - tag: component
+              value: print
+        - uuid: f17ed33cd6e6479abbfdd28d3dbcd492
+          name: 'BambuLab: Print sub-stage'
+          type: DEPENDENT
+          key: bambulab.mc_print_sub_stage
+          delay: '0'
+          description: 'Print sub-stage from $.print.mc_print_sub_stage.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.mc_print_sub_stage
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 9b58fe38441d4ab985cf68d6af87c7ad
+          name: 'BambuLab: Network conf'
+          type: DEPENDENT
+          key: bambulab.net.conf
+          delay: '0'
+          description: |
+            Numeric network configuration code from $.print.net.conf.
+            
+            Observed values:
+            - 16 = WiFi (observed in sample payloads)
+            - 0  = other modes (possibly LAN/default), not confirmed across models.
+            
+            If you see other values, share them and we can extend the mapping/meaning.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.net.conf
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: network
+        - uuid: 4a3a3d28e99246b8becacb9b478fdfbc
+          name: 'BambuLab: Network connection'
+          type: DEPENDENT
+          key: bambulab.net.connection
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: |
+            Heuristic LAN/WiFi connection label.
+            
+            Primarily uses $.print.net.conf:
+            - 16 = WiFi (observed in sample payloads)
+            - 0  = unclear; falls back to wired_flag
+            
+            If you see values other than 0/16, share them and we can extend the mapping.
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function toU32(n) {
+                    if (n === null || n === undefined) return null;
+                    var v = parseInt(n, 10);
+                    if (isNaN(v)) return null;
+                    if (v < 0) v = 4294967296 + v;
+                    return v;
+                  }
+                  
+                  try {
+                    var s = (value === null || value === undefined) ? '' : String(value);
+                    s = s.replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+                    var start = s.indexOf('{');
+                    var end = s.lastIndexOf('}');
+                    if (start === -1 || end === -1 || end <= start) return 'unknown';
+                    var j = JSON.parse(s.substring(start, end + 1));
+                    var p = (j && j.print) ? j.print : {};
+                  
+                    var conf = null;
+                    if (p.net && p.net.conf !== undefined && p.net.conf !== null) conf = parseInt(p.net.conf, 10);
+                  
+                    var hf = toU32(p.home_flag);
+                    var wiredFlag = (hf !== null && (hf & 0x00040000) !== 0) ? 1 : 0;
+                  
+                    if (conf === 16) return 'WiFi';
+                    if (conf === 0) return wiredFlag ? 'LAN' : 'WiFi';
+                    if (conf !== null && !isNaN(conf)) return 'unknown(conf=' + conf + ',flag=' + wiredFlag + ')';
+                  
+                    return wiredFlag ? 'LAN' : 'WiFi';
+                  } catch (e) {
+                    return 'unknown';
+                  }
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: network
+        - uuid: 3f9aa4c28b8b4c268003615fc93f288a
+          name: 'BambuLab: Network IP'
+          type: DEPENDENT
+          key: bambulab.net.ip
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: |
+            Printer IP address from $.print.net.info[0].ip.
+            
+            Bambu reports this as a 32-bit integer; the template converts it to IPv4 (tries little-endian and big-endian
+            and prefers private ranges 10/8, 172.16/12, 192.168/16).
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.print.net.info[0].ip'
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function toBytesBE(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]; }
+                  function toBytesLE(n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; }
+                  function isPrivate(b) {
+                    if (b[0] === 10) return true;
+                    if (b[0] === 192 && b[1] === 168) return true;
+                    if (b[0] === 172 && b[1] >= 16 && b[1] <= 31) return true;
+                    return false;
+                  }
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return '';
+                  if (n < 0) n = 4294967296 + n;
+                  var be = toBytesBE(n);
+                  var le = toBytesLE(n);
+                  var b = isPrivate(le) ? le : (isPrivate(be) ? be : le);
+                  return b[0] + '.' + b[1] + '.' + b[2] + '.' + b[3];
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: network
+        - uuid: 6718eaf918ce4cfa83d2090d1c6a69d3
+          name: 'BambuLab: Network mask'
+          type: DEPENDENT
+          key: bambulab.net.mask
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: |
+            Network mask from $.print.net.info[0].mask (same format as IP: 32-bit integer).
+            
+            The template converts it to IPv4 notation (e.g. 255.255.255.0) and tries to pick a valid mask.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.print.net.info[0].mask'
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function toBytesBE(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]; }
+                  function toBytesLE(n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; }
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return '';
+                  if (n < 0) n = 4294967296 + n;
+                  var le = toBytesLE(n);
+                  var be = toBytesBE(n);
+                  var isValidMask = function(b) {
+                    var bits = (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
+                    bits = bits >>> 0;
+                    var inv = (~bits) >>> 0;
+                    return ((inv + 1) & inv) === 0;
+                  };
+                  var b = isValidMask(le) ? le : (isValidMask(be) ? be : le);
+                  return b[0] + '.' + b[1] + '.' + b[2] + '.' + b[3];
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: network
+        - uuid: c4595fb32c15467da529e086a039cd9e
+          name: 'BambuLab: Wired network flag'
+          type: DEPENDENT
+          key: bambulab.net.wired_flag
+          delay: '0'
+          description: |
+            Derived flag from home_flag (bit 0x00040000).
+            
+            Warning: this bit can be set even when the printer is on WiFi, so do not treat it as authoritative.
+            Use 'Network connection' for the human-readable LAN/WiFi value.
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  if (n < 0) n = 4294967296 + n;
+                  return ((n & 0x00040000) !== 0) ? 1 : 0;
+          master_item:
+            key: bambulab.home_flag
+          tags:
+            - tag: component
+              value: network
+        - uuid: f46e39c18dd5489480f32604c0b8ecc0
+          name: 'BambuLab: Nozzle target temperature'
+          type: DEPENDENT
+          key: bambulab.nozzle.target_temperature
+          delay: '0'
+          value_type: FLOAT
+          units: °C
+          description: 'Target nozzle temperature from $.print.nozzle_target_temper.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.nozzle_target_temper
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: temperature
+        - uuid: 9a32a42b0ccd471aa8a2c18d83e3ab2c
+          name: 'BambuLab: Nozzle temperature'
+          type: DEPENDENT
+          key: bambulab.nozzle.temperature
+          delay: '0'
+          value_type: FLOAT
+          units: °C
+          description: 'Current nozzle temperature from $.print.nozzle_temper.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.nozzle_temper
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: temperature
+        - uuid: 7a0e36485ef64e4b81ba50e0f70e02ac
+          name: 'BambuLab: Online AHB'
+          type: DEPENDENT
+          key: bambulab.online.ahb
+          delay: '0'
+          description: 'Online flag AHB from $.print.online.ahb (0/1).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.online.ahb
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  if (value === true || value === 'true' || value === 1 || value === '1') return 1;
+                  if (value === false || value === 'false' || value === 0 || value === '0') return 0;
+                  return null;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 8a3b0364a1f84de1bd719bb8a12d3069
+          name: 'BambuLab: Online EXT'
+          type: DEPENDENT
+          key: bambulab.online.ext
+          delay: '0'
+          description: 'Online flag EXT from $.print.online.ext (0/1).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.online.ext
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  if (value === true || value === 'true' || value === 1 || value === '1') return 1;
+                  if (value === false || value === 'false' || value === 0 || value === '0') return 0;
+                  return null;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 63ae9cf8819c4c0c97da61a1aeaccb52
+          name: 'BambuLab: Online version'
+          type: DEPENDENT
+          key: bambulab.online.version
+          delay: '0'
+          description: |
+            Online version marker from $.print.online.version.
+            
+            Note: values observed in the wild range from small numbers (e.g. 9) to very large integers,
+            so this is likely an internal protocol/build marker rather than a human-readable firmware version.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.online.version
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 016ce7c370454183a08a81d37db96a7c
+          name: 'BambuLab: Online version (hex)'
+          type: DEPENDENT
+          key: bambulab.online.version.hex
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Online version marker formatted as hex (e.g. 0x00000009).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return '';
+                  if (n < 0) n = 4294967296 + n;
+                  var u = (n >>> 0);
+                  var s = u.toString(16).toUpperCase();
+                  while (s.length < 8) s = '0' + s;
+                  return '0x' + s;
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: bambulab.online.version
+          tags:
+            - tag: component
+              value: availability
+        - uuid: 4f559ff154414411bbe5715c521afbf0
+          name: 'BambuLab: Print error'
+          type: DEPENDENT
+          key: bambulab.print_error
+          delay: '0'
+          description: 'Numeric print error code from $.print.print_error (0 usually means OK).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.print_error
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+          triggers:
+            - uuid: b6d0f0e6a8a24f1fae3e44df9df16be2
+              expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.print_error)<>0'
+              name: 'BambuLab: Print error code'
+              priority: AVERAGE
+              description: 'Print error code is non-zero.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 8e0111214d354f8e87564200e29c411d
+          name: 'BambuLab: Print progress'
+          type: DEPENDENT
+          key: bambulab.progress
+          delay: '0'
+          units: '%'
+          description: 'Print progress percentage from $.print.mc_percent.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.mc_percent
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: f325790d6bed42c9a61cb3a5ac7b7ce3
+          name: 'BambuLab: Remaining time'
+          type: DEPENDENT
+          key: bambulab.remaining_time
+          delay: '0'
+          units: s
+          description: 'Estimated remaining time in seconds (derived from $.print.mc_remaining_time in minutes).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.mc_remaining_time
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : (n * 60);
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 67b6b44e17cd48b5a658607d5d3a17ac
+          name: 'BambuLab: SD card abnormal'
+          type: DEPENDENT
+          key: bambulab.sdcard.abnormal
+          delay: '0'
+          description: 'SD card abnormal flag derived from home_flag (bit 0x00000200).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  n = (n >>> 0);
+                  return ((n & 0x00000200) !== 0) ? 1 : 0;
+          master_item:
+            key: bambulab.home_flag
+          tags:
+            - tag: component
+              value: storage
+        - uuid: c6dc2c1effa44b56a5c5f87e65d3b003
+          name: 'BambuLab: SD card abnormal (text)'
+          type: DEPENDENT
+          key: bambulab.sdcard.abnormal.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable SD card status derived from SD card abnormal.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  return (n === 1) ? 'Abnormal' : 'Normal';
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: bambulab.sdcard.abnormal
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 8002d8aec56b459ab5bec2d27be56176
+          name: 'BambuLab: SD card present'
+          type: DEPENDENT
+          key: bambulab.sdcard.present
+          delay: '0'
+          description: 'Whether an SD card is present (from $.print.sdcard; 0/1).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.sdcard
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  if (value === true || value === 'true' || value === 1 || value === '1') return 1;
+                  if (value === false || value === 'false' || value === 0 || value === '0') return 0;
+                  return null;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 304dbc966df34d699c5b277c96df733b
+          name: 'BambuLab: Speed profile (level)'
+          type: DEPENDENT
+          key: bambulab.speed.level
+          delay: '0'
+          description: |
+            Speed profile level from $.print.spd_lvl.
+            
+            Common mapping:
+            - 1 = Silent
+            - 2 = Standard
+            - 3 = Sport
+            - 4 = Ludicrous
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.spd_lvl
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: e5a83564d5724b28a4573d5cb3ddf3dd
+          name: 'BambuLab: Speed magnitude'
+          type: DEPENDENT
+          key: bambulab.speed.magnitude
+          delay: '0'
+          units: '%'
+          description: |
+            Speed magnitude from $.print.spd_mag (percent-like value).
+            
+            Common values:
+            - 50 = Silent
+            - 100 = Standard
+            - 124 = Sport
+            - 166 = Ludicrous
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.spd_mag
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  return isNaN(n) ? null : n;
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 1b9742b62ea44859811dcd7ba5bcf59f
+          name: 'BambuLab: Speed magnitude (text)'
+          type: DEPENDENT
+          key: bambulab.speed.magnitude.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable label derived from Speed magnitude.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  if (n === 50) return 'Silent (50%)';
+                  if (n === 100) return 'Standard (100%)';
+                  if (n === 124) return 'Sport (124%)';
+                  if (n === 166) return 'Ludicrous (166%)';
+                  return 'Custom (' + String(n) + '%)';
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: bambulab.speed.magnitude
+          tags:
+            - tag: component
+              value: print
+        - uuid: bc6ffea7c9fe4ce6a20aad216a515ed7
+          name: 'BambuLab: Speed multiplier'
+          type: DEPENDENT
+          key: bambulab.speed.multiplier
+          delay: '0'
+          value_type: FLOAT
+          description: 'Speed multiplier derived from Speed magnitude (e.g. 100% -> 1.00).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return null;
+                  return n / 100.0;
+          master_item:
+            key: bambulab.speed.magnitude
+          tags:
+            - tag: component
+              value: print
+        - uuid: ec722956d5294f2ba903956a69a8b6c0
+          name: 'BambuLab: Speed profile'
+          type: DEPENDENT
+          key: bambulab.speed.profile
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable speed profile derived from Speed profile (level).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  if (n === 1) return 'Silent';
+                  if (n === 2) return 'Standard';
+                  if (n === 3) return 'Sport';
+                  if (n === 4) return 'Ludicrous';
+                  return 'level_' + String(n);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: bambulab.speed.level
+          tags:
+            - tag: component
+              value: print
+        - uuid: 0ab48347849b4f28886b91ebfe3d4b1d
+          name: 'BambuLab: Current stage'
+          type: DEPENDENT
+          key: bambulab.stage.current
+          delay: '0'
+          value_type: FLOAT
+          description: 'Numeric current stage ID from $.print.stg_cur.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.stg_cur
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 6f368abe72a14080bf20e17b4ec45fd7
+          name: 'BambuLab: Current stage (text)'
+          type: DEPENDENT
+          key: bambulab.stage.current.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable current stage derived from $.print.stg_cur.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var raw = (value === null || value === undefined) ? '' : String(value).trim();
+                  if (raw === '') return 'unknown';
+                  var id = parseInt(raw, 10);
+                  if (isNaN(id)) return 'unknown';
+                  
+                  var map = {
+                    '-1': 'idle',
+                    '0': 'printing',
+                    '1': 'auto_bed_leveling',
+                    '2': 'heatbed_preheating',
+                    '3': 'sweeping_xy_mech_mode',
+                    '4': 'changing_filament',
+                    '5': 'm400_pause',
+                    '6': 'paused_filament_runout',
+                    '7': 'heating_hotend',
+                    '8': 'calibrating_extrusion',
+                    '9': 'scanning_bed_surface',
+                    '10': 'inspecting_first_layer',
+                    '11': 'identifying_build_plate_type',
+                    '12': 'calibrating_micro_lidar',
+                    '13': 'homing_toolhead',
+                    '14': 'cleaning_nozzle_tip',
+                    '15': 'checking_extruder_temperature',
+                    '16': 'paused_user',
+                    '17': 'paused_front_cover_falling',
+                    '18': 'calibrating_micro_lidar',
+                    '19': 'calibrating_extrusion_flow',
+                    '20': 'paused_nozzle_temperature_malfunction',
+                    '21': 'paused_heat_bed_temperature_malfunction',
+                    '22': 'filament_unloading',
+                    '23': 'paused_skipped_step',
+                    '24': 'filament_loading',
+                    '25': 'calibrating_motor_noise',
+                    '26': 'paused_ams_lost',
+                    '27': 'paused_low_fan_speed_heat_break',
+                    '28': 'paused_chamber_temperature_control_error',
+                    '29': 'cooling_chamber',
+                    '30': 'paused_user_gcode',
+                    '31': 'motor_noise_showoff',
+                    '32': 'paused_nozzle_filament_covered_detected',
+                    '33': 'paused_cutter_error',
+                    '34': 'paused_first_layer_error',
+                    '35': 'paused_nozzle_clog',
+                    '36': 'check_absolute_accuracy_before_calibration',
+                    '37': 'absolute_accuracy_calibration',
+                    '38': 'check_absolute_accuracy_after_calibration',
+                    '39': 'calibrate_nozzle_offset',
+                    '40': 'bed_level_high_temperature',
+                    '41': 'check_quick_release',
+                    '42': 'check_door_and_cover',
+                    '43': 'laser_calibration',
+                    '44': 'check_platform',
+                    '45': 'check_birdeye_camera_position',
+                    '46': 'calibrate_birdeye_camera',
+                    '47': 'bed_level_phase_1',
+                    '48': 'bed_level_phase_2',
+                    '49': 'heating_chamber',
+                    '50': 'heated_bedcooling',
+                    '51': 'print_calibration_lines',
+                    '255': 'idle'
+                  };
+                  
+                  var k = String(id);
+                  return map.hasOwnProperty(k) ? map[k] : 'unknown';
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          master_item:
+            key: bambulab.stage.current
+          tags:
+            - tag: component
+              value: print
+        - uuid: 8c83c345d9964f2d83a75ece20cc1758
+          name: 'BambuLab: State'
+          type: DEPENDENT
+          key: bambulab.state
+          delay: '0'
+          description: 'Numeric print state from $.print.state (commonly: 4=Running, 5=Paused, 6=Finished, 7=Failed).'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.state
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+          triggers:
+            - uuid: fff8cd68b28541de811494488bba5ec6
+              expression: 'nodata(/BambuLab by Zabbix agent2 MQTT/bambulab.state,{$BAMBU_NODATA})=1'
+              name: 'BambuLab: No data (MQTT status)'
+              priority: AVERAGE
+              description: 'No data was received from the printer MQTT topic for the configured period.'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 6b5b20af6f2c4ab981f2c1680fdb2c73
+              expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.state)=5 and min(/BambuLab by Zabbix agent2 MQTT/bambulab.state,{$BAMBU_PAUSE_TIME})=5'
+              name: 'BambuLab: Print paused for too long'
+              priority: WARNING
+              description: 'Print state stayed paused (state=5) longer than the configured pause window.'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: f38f1b1aa0854bcfa2005bc069a13407
+          name: 'BambuLab: State (text)'
+          type: DEPENDENT
+          key: bambulab.state.text
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Human-readable print state derived from $.print.state.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.state
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var n = parseInt(value, 10);
+                  if (isNaN(n)) return 'unknown';
+                  if (n === 4) return 'Running';
+                  if (n === 5) return 'Paused';
+                  if (n === 6) return 'Finished';
+                  if (n === 7) return 'Failed';
+                  return String(n);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: 25741d289cff45f2a88c75e19ee7fe64
+          name: 'BambuLab: Subtask name'
+          type: DEPENDENT
+          key: bambulab.subtask_name
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Current job name / profile from $.print.subtask_name.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.subtask_name
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: print
+        - uuid: dfa57bdfde2747c79135332bc82f069e
+          name: 'BambuLab: WiFi signal'
+          type: DEPENDENT
+          key: bambulab.wifi.signal
+          delay: '0'
+          value_type: FLOAT
+          units: dBm
+          description: |
+            WiFi RSSI signal level in dBm (from $.print.wifi_signal, e.g. "-74dBm").
+            
+            Rough guidance:
+            - -50 to -65 dBm: good
+            - -65 to -75 dBm: weak
+            - < -75 dBm: poor (may cause disconnects)
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.wifi_signal
+              error_handler: DISCARD_VALUE
+            - type: REGEX
+              parameters:
+                - '(-?[0-9]+)'
+                - \1
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          tags:
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 051bf912f2814a7b99b5717ccb8c99e2
+              expression: 'min(/BambuLab by Zabbix agent2 MQTT/bambulab.wifi.signal,{$BAMBU_WIFI_WARN_FOR})<{$BAMBU_WIFI_WARN}'
+              name: 'BambuLab: WiFi signal low (< {$BAMBU_WIFI_WARN} dBm)'
+              priority: WARNING
+              description: 'WiFi signal stayed below the warning threshold for the configured duration.'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 2aec22a4ab634db7ba703519122cd0db
+              expression: 'min(/BambuLab by Zabbix agent2 MQTT/bambulab.wifi.signal,{$BAMBU_WIFI_CRIT_FOR})<{$BAMBU_WIFI_CRIT}'
+              name: 'BambuLab: WiFi signal very low (< {$BAMBU_WIFI_CRIT} dBm)'
+              priority: AVERAGE
+              description: 'WiFi signal stayed below the critical threshold for the configured duration.'
+              tags:
+                - tag: scope
+                  value: availability
+      discovery_rules:
+        - uuid: 7710ebfbe64247afbe13599ade2421d7
+          name: 'BambuLab: AMS discovery'
+          type: DEPENDENT
+          key: bambulab.ams.discovery
+          delay: '0'
+          description: 'Discover AMS units.'
+          item_prototypes:
+            - uuid: 4ffcbc8376d24c18964955be50380c0d
+              name: 'AMS {#AMS_ID}: Get data'
+              type: DEPENDENT
+              key: 'bambulab.ams.data[{#AMS_ID}]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Raw AMS JSON object for AMS {#AMS_ID}.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.print.ams.ams[?(@.id == "{#AMS_ID}")].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: component
+                  value: raw
+            - uuid: b4e1be60cd4a4ee7b0959d442ed89c97
+              name: 'AMS {#AMS_ID}: Humidity (level)'
+              type: DEPENDENT
+              key: 'bambulab.ams.humidity_level[{#AMS_ID}]'
+              delay: '0'
+              description: |
+                AMS humidity level index from the AMS object (field: humidity).
+                
+                This is typically a UI "bar/level" value (not a real %). Use 'Humidity (raw)' for %.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.humidity
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.data[{#AMS_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+            - uuid: e3b313de382d49fca59a13d06b95a958
+              name: 'AMS {#AMS_ID}: Humidity (raw)'
+              type: DEPENDENT
+              key: 'bambulab.ams.humidity_raw[{#AMS_ID}]'
+              delay: '0'
+              units: '%'
+              description: 'AMS humidity (raw percentage) from the AMS object (field: humidity_raw).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.humidity_raw
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.data[{#AMS_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+            - uuid: cf82a7fbaa25481da598980b95b0bb0a
+              name: 'AMS {#AMS_ID}: Info'
+              type: DEPENDENT
+              key: 'bambulab.ams.info[{#AMS_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'AMS info/status code (meaning is not officially documented).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.info
+                  error_handler: DISCARD_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.data[{#AMS_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+            - uuid: 3de0e68c10fe4ad8b18a1e904cfbf825
+              name: 'AMS {#AMS_ID}: Temperature'
+              type: DEPENDENT
+              key: 'bambulab.ams.temp[{#AMS_ID}]'
+              delay: '0'
+              value_type: FLOAT
+              units: °C
+              description: 'AMS temperature from the AMS object (field: temp).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.temp
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.data[{#AMS_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: component
+                  value: temperature
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          lld_macro_paths:
+            - lld_macro: '{#AMS_ID}'
+              path: $.id
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.ams.ams
+              error_handler: DISCARD_VALUE
+        - uuid: 3fce8e9bb4474e8f83e0caf411ed43a4
+          name: 'BambuLab: AMS trays discovery'
+          type: DEPENDENT
+          key: bambulab.ams.trays.discovery
+          delay: '0'
+          description: 'Discover AMS trays (all AMS units, all tray slots).'
+          item_prototypes:
+            - uuid: 49680de751884bdeada73f077362eeff
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Color'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.color[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'Filament color as #RRGGBB, derived from tray_color (RRGGBBAA).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.tray_color
+                  error_handler: DISCARD_VALUE
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var s = (value === null || value === undefined) ? '' : String(value).trim();
+                      if (/^[0-9A-Fa-f]{8}$/.test(s)) {
+                        return '#' + s.substring(0, 6).toUpperCase();
+                      }
+                      if (/^[0-9A-Fa-f]{6}$/.test(s)) {
+                        return '#' + s.toUpperCase();
+                      }
+                      if (/^#[0-9A-Fa-f]{6}$/.test(s)) {
+                        return s.toUpperCase();
+                      }
+                      return s;
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: b5edfdd4cc5d4fff9c1c5a1e57dde3f0
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Color label'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.color_label[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'Text label for dashboards: color swatch + hex (e.g. 🟧 #FF6A13).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.tray_color
+                  error_handler: DISCARD_VALUE
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+                      function hexToRgb(hex) {
+                        var m = /^#?([0-9A-Fa-f]{6})$/.exec(hex);
+                        if (!m) return null;
+                        var v = m[1];
+                        return {
+                          r: parseInt(v.substring(0, 2), 16),
+                          g: parseInt(v.substring(2, 4), 16),
+                          b: parseInt(v.substring(4, 6), 16)
+                        };
+                      }
+                      function rgbToHsv(r, g, b) {
+                        var rn = r / 255, gn = g / 255, bn = b / 255;
+                        var max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+                        var d = max - min;
+                        var h = 0;
+                        if (d !== 0) {
+                          if (max === rn) h = ((gn - bn) / d) % 6;
+                          else if (max === gn) h = ((bn - rn) / d) + 2;
+                          else h = ((rn - gn) / d) + 4;
+                          h *= 60;
+                          if (h < 0) h += 360;
+                        }
+                        var s = (max === 0) ? 0 : d / max;
+                        var v = max;
+                        return { h: h, s: s, v: v };
+                      }
+                      
+                      var raw = (value === null || value === undefined) ? '' : String(value).trim().toUpperCase();
+                      if (raw === '') return '';
+                      
+                      raw = raw.replace(/^#/, '');
+                      if (/^[0-9A-F]{8}$/.test(raw)) raw = raw.substring(0, 6);
+                      if (/^[0-9A-F]{6}$/.test(raw)) raw = '#' + raw;
+                      
+                      var rgb = hexToRgb(raw);
+                      if (!rgb) return '■ ' + raw;
+                      
+                      var hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+                      var sat = clamp01(hsv.s);
+                      var val = clamp01(hsv.v);
+                      
+                      var swatch = '■';
+                      if (sat < 0.12) {
+                        swatch = (val < 0.35) ? '⬛' : '⬜';
+                      } else {
+                        var h = hsv.h;
+                        if (h < 15 || h >= 345) swatch = '🟥';
+                        else if (h < 45) swatch = '🟧';
+                        else if (h < 75) swatch = '🟨';
+                        else if (h < 165) swatch = '🟩';
+                        else if (h < 255) swatch = '🟦';
+                        else swatch = '🟪';
+                      }
+                      
+                      return swatch + ' ' + raw;
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: abb81d0b28024d00ae4a8e4c6d53783f
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Get data'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Raw tray JSON object for AMS {#AMS_ID}, tray slot {#TRAY_ID}.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.print.ams.ams[?(@.id == "{#AMS_ID}")].tray[?(@.id == "{#TRAY_ID}")].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: component
+                  value: raw
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: c4b835667ada451c8de1d482ba296a88
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Is empty'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.empty[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              description: |
+                Derived empty flag for this tray slot (0/1).
+                
+                Heuristic:
+                - Empty if tray_type is missing/empty
+                - OR tag_uid is all zeros and remain is -1
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      function safeParse(s) {
+                        if (s === null || s === undefined) return null;
+                        s = String(s).replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+                        var start = s.indexOf('{');
+                        var end = s.lastIndexOf('}');
+                        if (start === -1 || end === -1 || end <= start) return null;
+                        try { return JSON.parse(s.substring(start, end + 1)); } catch (e) { return null; }
+                      }
+                      var t = safeParse(value) || {};
+                      var trayType = (t.tray_type === null || t.tray_type === undefined) ? '' : String(t.tray_type).trim();
+                      var tag = (t.tag_uid === null || t.tag_uid === undefined) ? '' : String(t.tag_uid).trim();
+                      var remain = (t.remain === null || t.remain === undefined) ? null : parseInt(t.remain, 10);
+                      var tagZeros = (tag === '0000000000000000');
+                      if (trayType === '') return 1;
+                      if (tagZeros && remain === -1) return 1;
+                      return 0;
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 95081290f2d349ea9af52703d020d2ee
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Material'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.material[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'Combined filament label for this tray slot (tray_type + tray_sub_brands).'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      function safeParse(s) {
+                        if (s === null || s === undefined) return null;
+                        s = String(s).replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+                        var start = s.indexOf('{');
+                        var end = s.lastIndexOf('}');
+                        if (start === -1 || end === -1 || end <= start) return null;
+                        try { return JSON.parse(s.substring(start, end + 1)); } catch (e) { return null; }
+                      }
+                      var t = safeParse(value) || {};
+                      var trayType = (t.tray_type === null || t.tray_type === undefined) ? '' : String(t.tray_type).trim();
+                      var subBrand = (t.tray_sub_brands === null || t.tray_sub_brands === undefined) ? '' : String(t.tray_sub_brands).trim();
+                      if (trayType === '' && subBrand === '') return '';
+                      if (trayType === '') return subBrand;
+                      if (subBrand === '') return trayType;
+                      return trayType + ' - ' + subBrand;
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 8f012649acfb4a4e9b0645b3c20d09c6
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Nozzle temp max'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.nozzle_temp_max[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              units: °C
+              description: 'Recommended maximum nozzle temperature for this filament (field: nozzle_temp_max).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.nozzle_temp_max
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 73345479a384442ab56de4e1f760f67d
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Nozzle temp min'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.nozzle_temp_min[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              units: °C
+              description: 'Recommended minimum nozzle temperature for this filament (field: nozzle_temp_min).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.nozzle_temp_min
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: e0339f5acd9540cb92e1f7e0deeba68b
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Remaining'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.remain[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              units: '%'
+              description: 'Remaining filament percentage for this tray slot (field: remain).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.remain
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 7e766c93786a41928ddda8d523d30865
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: State'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.state[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              description: |
+                Tray state code (field: state).
+                
+                Note: this field is not reliable on its own for determining Empty vs Loaded.
+                For a more stable status, use the derived items 'Status' / 'Is empty'
+                (based on tray_type, tag_uid and remain).
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.state
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 8228d88a02b341a4aa434b011248ad86
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Status'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.status[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: |
+                Derived tray status label.
+                
+                - Empty: tray_type is missing/empty (or tag_uid is all zeros and remain is -1)
+                - Loaded: tray_type is present
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      function safeParse(s) {
+                        if (s === null || s === undefined) return null;
+                        s = String(s).replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+                        var start = s.indexOf('{');
+                        var end = s.lastIndexOf('}');
+                        if (start === -1 || end === -1 || end <= start) return null;
+                        try { return JSON.parse(s.substring(start, end + 1)); } catch (e) { return null; }
+                      }
+                      var t = safeParse(value) || {};
+                      var trayType = (t.tray_type === null || t.tray_type === undefined) ? '' : String(t.tray_type).trim();
+                      var tag = (t.tag_uid === null || t.tag_uid === undefined) ? '' : String(t.tag_uid).trim();
+                      var remain = (t.remain === null || t.remain === undefined) ? null : parseInt(t.remain, 10);
+                      var tagZeros = (tag === '0000000000000000');
+                      if (trayType === '' || (tagZeros && remain === -1)) return 'Empty';
+                      return 'Loaded';
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 19461815543c479d86ec2006eaec9496
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Sub brand'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.sub_brand[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'Filament sub-brand / profile name for this tray slot (field: tray_sub_brands).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.tray_sub_brands
+                  error_handler: DISCARD_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+            - uuid: 1ba8a69613c94c968f70689dd22bccce
+              name: 'AMS {#AMS_ID} Tray {#TRAY_ID}: Type'
+              type: DEPENDENT
+              key: 'bambulab.ams.tray.type[{#AMS_ID},{#TRAY_ID}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'Filament type for this tray slot (field: tray_type).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.tray_type
+                  error_handler: DISCARD_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: 'bambulab.ams.tray.data[{#AMS_ID},{#TRAY_ID}]'
+              tags:
+                - tag: ams
+                  value: '{#AMS_ID}'
+                - tag: component
+                  value: ams
+                - tag: tray
+                  value: '{#TRAY_ID}'
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          lld_macro_paths:
+            - lld_macro: '{#AMS_ID}'
+              path: $.ams_id
+            - lld_macro: '{#TRAY_ID}'
+              path: $.tray_id
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  try {
+                    var root = JSON.parse(value);
+                    var amsList = (root && root.print && root.print.ams && root.print.ams.ams) ? root.print.ams.ams : [];
+                    var out = [];
+                  
+                    for (var i = 0; i < amsList.length; i++) {
+                      var ams = amsList[i] || {};
+                      var amsId = String(ams.id);
+                      var trays = Array.isArray(ams.tray) ? ams.tray : [];
+                  
+                      for (var j = 0; j < trays.length; j++) {
+                        var tray = trays[j] || {};
+                        out.push({ ams_id: amsId, tray_id: String(tray.id) });
+                      }
+                    }
+                  
+                    return JSON.stringify(out);
+                  } catch (e) {
+                    return '[]';
+                  }
+        - uuid: 791e94ae58094beaa1673a67affe62e7
+          name: 'BambuLab: Lights discovery'
+          type: DEPENDENT
+          key: bambulab.lights.discovery
+          delay: '0'
+          description: 'Discover lights reported by the printer.'
+          item_prototypes:
+            - uuid: 9bf22d6f13614d66905669eaa649c243
+              name: 'Light {#LIGHT_NODE}: Get data'
+              type: DEPENDENT
+              key: 'bambulab.light.data[{#LIGHT_NODE}]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Raw light JSON object for {#LIGHT_NODE} from $.print.lights_report.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.print.lights_report[?(@.node == "{#LIGHT_NODE}")].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+              tags:
+                - tag: component
+                  value: lights
+                - tag: component
+                  value: raw
+                - tag: light
+                  value: '{#LIGHT_NODE}'
+            - uuid: dff73ba54321460b858a4c8bb9e1f3d5
+              name: 'Light {#LIGHT_NODE}: Mode'
+              type: DEPENDENT
+              key: 'bambulab.light.mode[{#LIGHT_NODE}]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: 'Light mode string for {#LIGHT_NODE} (e.g. on/off/flashing).'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.mode
+                  error_handler: DISCARD_VALUE
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'bambulab.light.data[{#LIGHT_NODE}]'
+              tags:
+                - tag: component
+                  value: lights
+                - tag: light
+                  value: '{#LIGHT_NODE}'
+          master_item:
+            key: 'bambulab.get["{$BAMBU_URL}","device/{$BAMBU_SN}/report","{$BAMBU_USER}","{$BAMBU_PASS}"]'
+          lld_macro_paths:
+            - lld_macro: '{#LIGHT_NODE}'
+              path: $.node
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.print.lights_report
+              error_handler: DISCARD_VALUE
+      macros:
+        - macro: '{$BAMBU_BED_DELTA}'
+          value: '10'
+          description: 'Bed temperature delta to trigger heating warning (°C).'
+        - macro: '{$BAMBU_BED_HEAT_TIME}'
+          value: 10m
+          description: 'Bed heating timeout window.'
+        - macro: '{$BAMBU_BED_TARGET_MIN}'
+          value: '40'
+          description: 'Minimum bed target temperature to check heating issues (°C).'
+        - macro: '{$BAMBU_DOOR_OPEN_TIME}'
+          value: 2m
+          description: 'Door open duration while printing before raising a warning.'
+        - macro: '{$BAMBU_INTERVAL}'
+          value: 1m
+          description: 'Master item polling interval.'
+        - macro: '{$BAMBU_NODATA}'
+          value: 5m
+          description: 'No data trigger period for MQTT status.'
+        - macro: '{$BAMBU_NOZZLE_DELTA}'
+          value: '15'
+          description: 'Nozzle temperature delta to trigger heating warning (°C).'
+        - macro: '{$BAMBU_NOZZLE_HEAT_TIME}'
+          value: 5m
+          description: 'Nozzle heating timeout window.'
+        - macro: '{$BAMBU_NOZZLE_TARGET_MIN}'
+          value: '150'
+          description: 'Minimum nozzle target temperature to check heating issues (°C).'
+        - macro: '{$BAMBU_PASS}'
+          type: SECRET_TEXT
+          description: 'Bambu access code / MQTT password.'
+        - macro: '{$BAMBU_PAUSE_TIME}'
+          value: 10m
+          description: 'Print paused duration before raising a warning.'
+        - macro: '{$BAMBU_SN}'
+          value: 0948BB531701177
+          description: 'Printer serial number (SN) used to build MQTT topic device/<SN>/report.'
+        - macro: '{$BAMBU_TIMEOUT}'
+          value: 15s
+          description: 'Agent item timeout (must be <= agent Timeout).'
+        - macro: '{$BAMBU_URL}'
+          value: 'tls://192.168.220.75:8883'
+          description: 'MQTT broker URL, e.g. tls://192.168.220.75:8883'
+        - macro: '{$BAMBU_USER}'
+          value: bblp
+          description: 'MQTT username (Bambu LAN mode usually uses bblp).'
+        - macro: '{$BAMBU_WIFI_CRIT}'
+          value: '-80'
+          description: 'WiFi RSSI critical threshold in dBm.'
+        - macro: '{$BAMBU_WIFI_CRIT_FOR}'
+          value: 10m
+          description: 'WiFi RSSI critical duration.'
+        - macro: '{$BAMBU_WIFI_WARN}'
+          value: '-75'
+          description: 'WiFi RSSI warning threshold in dBm.'
+        - macro: '{$BAMBU_WIFI_WARN_FOR}'
+          value: 30m
+          description: 'WiFi RSSI warning duration.'
+      dashboards:
+        - uuid: 48cb47a69aa24dc594f088f2417cf2ad
+          name: BambuLab
+          pages:
+            - name: Printer
+              widgets:
+                - type: item
+                  name: 'Print progress'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.progress
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+                - type: item
+                  name: 'G-code state'
+                  'y': '3'
+                  width: '18'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.gcode_state
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '30'
+                - type: item
+                  name: Nozzle
+                  'y': '5'
+                  width: '18'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.nozzle.temperature
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '34'
+                - type: item
+                  name: 'Cooling fan'
+                  'y': '7'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.fan.cooling_speed
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+                - type: item
+                  name: 'Remaining time'
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.remaining_time
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+                - type: item
+                  name: 'Print error'
+                  x: '18'
+                  'y': '3'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.print_error
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: E53935
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '1'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+                - type: item
+                  name: 'Nozzle target'
+                  x: '18'
+                  'y': '5'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.nozzle.target_temperature
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '28'
+                - type: item
+                  name: 'Heatbreak fan'
+                  x: '18'
+                  'y': '7'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.fan.heatbreak_speed
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+                - type: item
+                  name: State
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.state.text
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '22'
+                - type: item
+                  name: 'Active tray'
+                  x: '36'
+                  'y': '3'
+                  width: '18'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.ams.tray_now.text
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '22'
+                - type: item
+                  name: Bed
+                  x: '36'
+                  'y': '5'
+                  width: '18'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.bed.temperature
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '34'
+                - type: item
+                  name: 'Big fan 1'
+                  x: '36'
+                  'y': '7'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.fan.big1_speed
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+                - type: item
+                  name: Stage
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.stage.current.text
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '22'
+                - type: item
+                  name: 'WiFi signal'
+                  x: '54'
+                  'y': '3'
+                  width: '18'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.wifi.signal
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '30'
+                - type: item
+                  name: 'Bed target'
+                  x: '54'
+                  'y': '5'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.bed.target_temperature
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '28'
+                - type: item
+                  name: 'Big fan 2'
+                  x: '54'
+                  'y': '7'
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'BambuLab by Zabbix agent2 MQTT'
+                        key: bambulab.fan.big2_speed
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                    - type: INTEGER
+                      name: value_size
+                      value: '36'
+            - name: 'AMS 0'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 0: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 0: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 0: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 0: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 0: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A0IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 1'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 1: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 1: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 1: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 1: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 1: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A1IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 2'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 2: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 2: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 2: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 2: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 2: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A2IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 3'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 3: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 3: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 3: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 3: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 3: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A3IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 4'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 4: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 4: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 4: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 4: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 4: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A4IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 5'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 5: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 5: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 5: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 5: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 5: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A5IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 6'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 6: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 6: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 6: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 6: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 6: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A6IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+            - name: 'AMS 7'
+              widgets:
+                - type: honeycomb
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7: Humidity (raw)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 7: Humidity (raw)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7HR0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray colors'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7 Tray *: Color label'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7CL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '26'
+                - type: honeycomb
+                  name: 'Tray types'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7 Tray *: Type'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7TY0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '18'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: FFC107
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7: Temperature'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 7: Temperature'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7TP0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '1'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+                - type: honeycomb
+                  x: '36'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: 66BB6A
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7: Humidity (level)'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 7: Humidity (level)'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7HL0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                - type: honeycomb
+                  name: 'Tray remaining'
+                  x: '36'
+                  'y': '3'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7 Tray *: Remaining'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7RM0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FFC107
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 66BB6A
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '20'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: 2E7D32
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '60'
+                - type: honeycomb
+                  name: 'Tray sub brands'
+                  x: '36'
+                  'y': '6'
+                  width: '36'
+                  height: '3'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7 Tray *: Sub brand'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("AMS.*Tray.*(\d)",Tray \1)}'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '25'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7SB0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '22'
+                - type: honeycomb
+                  x: '54'
+                  width: '18'
+                  height: '3'
+                  hide_header: 'YES'
+                  fields:
+                    - type: STRING
+                      name: bg_color
+                      value: D9E7ED
+                    - type: STRING
+                      name: items.0
+                      value: 'AMS 7: Info'
+                    - type: STRING
+                      name: primary_label
+                      value: 'AMS 7: Info'
+                    - type: INTEGER
+                      name: primary_label_size
+                      value: '15'
+                    - type: INTEGER
+                      name: primary_label_size_type
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: A7IF0
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: INTEGER
+                      name: secondary_label_size
+                      value: '40'
+                    - type: INTEGER
+                      name: secondary_label_size_type
+                      value: '1'
+  triggers:
+    - uuid: 2d8f3a1536da47b1a401ad6f8cc40ef5
+      expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.is_printing)=1 and last(/BambuLab by Zabbix agent2 MQTT/bambulab.bed.target_temperature)>{$BAMBU_BED_TARGET_MIN} and min(/BambuLab by Zabbix agent2 MQTT/bambulab.bed.temperature,{$BAMBU_BED_HEAT_TIME}) < (last(/BambuLab by Zabbix agent2 MQTT/bambulab.bed.target_temperature)-{$BAMBU_BED_DELTA})'
+      name: 'BambuLab: Bed not reaching target'
+      priority: WARNING
+      description: |
+        'Bed temperature stayed below target by the configured delta while printing.'
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: 91a3c8b8e1b54f6ba7cb5218b44e1c6f
+      expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.is_printing)=1 and min(/BambuLab by Zabbix agent2 MQTT/bambulab.door_open,{$BAMBU_DOOR_OPEN_TIME})=1'
+      name: 'BambuLab: Door open while printing'
+      priority: WARNING
+      description: |
+        'Door open detected while printing for longer than the configured time.'
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: 9a45f3e67c5d4c4f89e2f846b184f5ee
+      expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.filament.tangle_supported)=1 and last(/BambuLab by Zabbix agent2 MQTT/bambulab.filament.tangle_detected)=1'
+      name: 'BambuLab: Filament tangle detected'
+      priority: HIGH
+      description: |
+        'Filament tangle detected (supported by printer).'
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: 6f90566293f84d3e9f2f2f0b7a0a9e2b
+      expression: 'last(/BambuLab by Zabbix agent2 MQTT/bambulab.is_printing)=1 and last(/BambuLab by Zabbix agent2 MQTT/bambulab.nozzle.target_temperature)>{$BAMBU_NOZZLE_TARGET_MIN} and min(/BambuLab by Zabbix agent2 MQTT/bambulab.nozzle.temperature,{$BAMBU_NOZZLE_HEAT_TIME}) < (last(/BambuLab by Zabbix agent2 MQTT/bambulab.nozzle.target_temperature)-{$BAMBU_NOZZLE_DELTA})'
+      name: 'BambuLab: Nozzle not reaching target'
+      priority: AVERAGE
+      description: |
+        'Nozzle temperature stayed below target by the configured delta while printing.'
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      tags:
+        - tag: scope
+          value: availability

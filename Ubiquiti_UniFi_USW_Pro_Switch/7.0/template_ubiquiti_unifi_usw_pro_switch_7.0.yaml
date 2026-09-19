@@ -1,0 +1,1065 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 3ed593c73ebe45349368a9a7279c3fd9
+      template: 'Ubiquiti Unifi USW Pro Switch SNMP'
+      name: 'Ubiquiti Unifi USW Pro Switch SNMP'
+      description: |
+        Zabbix template for Ubiquiti Unifi PRO switches:
+        - USW-Pro-24 (24-port)
+        - USW-Pro-48 (48-port)
+        - USW-Pro-24-PoE (24-port PoE)
+        - USW-Pro-48-PoE (48-port PoE)
+        
+        Broadcom-based switches (sysObjectID: enterprises.4413).
+        For standard models (USW-24/48, USW-24-PoE) use the separate USW Switch template.
+        
+        Monitors via SNMP v2c using enterprise 4413 MIB, ENTITY-MIB and standard IF-MIB.
+        
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 21b2276697fd4be490469b524711a72e
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: icmpping
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 184793954c7140b99c48f295d3c84d05
+              expression: 'max(/Ubiquiti Unifi USW Pro Switch SNMP/icmpping,#3)=0'
+              name: 'Unifi Switch Pro: Unavailable by ICMP ping'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 5cd9ed1ef9d14f4da2ccee0fe406eb16
+          name: 'ICMP loss'
+          type: SIMPLE
+          key: icmppingloss
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 6ebd2dafd2084d5b92d4fb90e20576d6
+              expression: 'min(/Ubiquiti Unifi USW Pro Switch SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/Ubiquiti Unifi USW Pro Switch SNMP/icmppingloss,5m)<100'
+              name: 'Unifi Switch Pro: High ICMP ping loss'
+              event_name: 'Unifi Switch Pro: High ICMP ping loss (>{$ICMP_LOSS_WARN}%)'
+              opdata: 'Loss: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Unifi Switch Pro: Unavailable by ICMP ping'
+                  expression: 'max(/Ubiquiti Unifi USW Pro Switch SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: b75241a756294db8a011284b2c150346
+          name: 'ICMP response time'
+          type: SIMPLE
+          key: icmppingsec
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: a88ebd4eaea74e7e9096fd17a86ae54a
+              expression: 'avg(/Ubiquiti Unifi USW Pro Switch SNMP/icmppingsec,5m)>{$ICMP_RESPONSE_TIME_WARN}'
+              name: 'Unifi Switch Pro: High ICMP ping response time'
+              event_name: 'Unifi Switch Pro: High ICMP ping response time (>{$ICMP_RESPONSE_TIME_WARN}s)'
+              opdata: 'Value: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Unifi Switch Pro: High ICMP ping loss'
+                  expression: 'min(/Ubiquiti Unifi USW Pro Switch SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/Ubiquiti Unifi USW Pro Switch SNMP/icmppingloss,5m)<100'
+                - name: 'Unifi Switch Pro: Unavailable by ICMP ping'
+                  expression: 'max(/Ubiquiti Unifi USW Pro Switch SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 6b19ace72ca444aa8a494da1b836bc51
+          name: 'Unifi Switch Pro: SNMP walk network interfaces'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.2.2.1.8,1.3.6.1.2.1.2.2.1.7,1.3.6.1.2.1.31.1.1.1.18,1.3.6.1.2.1.31.1.1.1.1,1.3.6.1.2.1.2.2.1.2,1.3.6.1.2.1.2.2.1.3,1.3.6.1.2.1.31.1.1.1.6,1.3.6.1.2.1.31.1.1.1.10,1.3.6.1.2.1.2.2.1.14,1.3.6.1.2.1.2.2.1.20,1.3.6.1.2.1.2.2.1.19,1.3.6.1.2.1.2.2.1.13,1.3.6.1.2.1.31.1.1.1.15]'
+          key: net.if.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of IF-MIB for network interface discovery and monitoring.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: afb4c04094834eef8ed7a34e0e961021
+          name: 'Unifi Switch Pro: SNMP walk fans'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.4413.1.1.43.1.6.1.1.1,1.3.6.1.4.1.4413.1.1.43.1.6.1.3.1,1.3.6.1.4.1.4413.1.1.43.1.6.1.4.1,1.3.6.1.4.1.4413.1.1.43.1.6.1.5.1]'
+          key: sensor.fan.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of UnifiSwitch-BOXSERVICES-MIB fan table.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 5f5ceb81ce7a4086bf210851ca4434c0
+          name: 'Unifi Switch Pro: SNMP walk temperature sensors'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.4413.1.1.43.1.8.1.2.1,1.3.6.1.4.1.4413.1.1.43.1.8.1.3.1,1.3.6.1.4.1.4413.1.1.43.1.8.1.5.1]'
+          key: sensor.temp.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of UnifiSwitch-BOXSERVICES-MIB temperature sensor table.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: ddc5058047584bdf91b5665b1bc12f68
+          name: 'System contact details'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.4.0]'
+          key: 'system.contact[sysContact.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysContact.0'
+          inventory_link: CONTACT
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 5bc1f06eb4da461a8d7f42383a566eee
+          name: 'CPU utilization (5 sec)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.4.11.0]'
+          key: system.cpu.util
+          value_type: FLOAT
+          units: '%'
+          description: 'Enterprise 4413 - CPU utilization 5 second average'
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 2ec00f1a49594f798c8096a0971ecab6
+          name: 'CPU utilization (1 min)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.4.12.0]'
+          key: system.cpu.util.1min
+          value_type: FLOAT
+          units: '%'
+          description: 'Enterprise 4413 - CPU utilization 60 second average'
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 6a5a144011664fe3bcd9ac2e7eb6c0e4
+          name: 'CPU utilization (5 min)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.4.13.0]'
+          key: system.cpu.util.5min
+          value_type: FLOAT
+          units: '%'
+          description: 'Enterprise 4413 - CPU utilization 300 second average'
+          tags:
+            - tag: component
+              value: cpu
+          triggers:
+            - uuid: 5fc0393752bd411895c423b201771b0f
+              expression: 'min(/Ubiquiti Unifi USW Pro Switch SNMP/system.cpu.util.5min,5m)>{$CPU.UTIL.CRIT}'
+              name: 'Unifi Switch Pro: High CPU utilization'
+              event_name: 'Unifi Switch Pro: High CPU utilization (>{$CPU.UTIL.CRIT}% for 5m)'
+              opdata: 'Current utilization: {ITEM.LASTVALUE1}%'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: fbb5fa71e40b4a4680387be5c3400b08
+          name: 'System description'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.1.0]'
+          key: 'system.descr[sysDescr.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysDescr.0'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 3512aa30242c4712b17be12a0e27997f
+          name: 'MAC address'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.1.4.0]'
+          key: system.hw.mac
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'Enterprise 4413 - base MAC address'
+          inventory_link: MACADDRESS_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+        - uuid: 918191c98e294f88b4ae63e420ec6644
+          name: 'Hardware model name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.1.2.0]'
+          key: system.hw.model
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'Enterprise 4413 - switch model name'
+          inventory_link: MODEL
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+        - uuid: 228e325581cc40d98b825c730a1ed9e8
+          name: 'Hardware serial number'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.47.1.1.1.1.11.1]'
+          key: system.hw.serialnumber
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'ENTITY-MIB::entPhysicalSerialNum.1'
+          inventory_link: SERIALNO_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: c2a8ca1f61174a8f8d6c4e3f3b661644
+              expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/system.hw.serialnumber,#1)<>last(/Ubiquiti Unifi USW Pro Switch SNMP/system.hw.serialnumber,#2)'
+              name: 'Unifi Switch Pro: Device has been replaced'
+              event_name: 'Unifi Switch Pro: Device has been replaced (new serial number: {ITEM.LASTVALUE1})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 51b4b328dba84b4e9cc2ce717c2d7105
+          name: 'Hardware version'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.1.6.0]'
+          key: system.hw.version
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'Enterprise 4413 - hardware revision'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+        - uuid: 486a95737b6d4a97ac3b86d90dacb22a
+          name: 'System location'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.6.0]'
+          key: 'system.location[sysLocation.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysLocation.0'
+          inventory_link: LOCATION
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: c8e4cf66acda40a1afc7bfdb863d3d9e
+          name: 'System name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.5.0]'
+          key: system.name
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysName.0'
+          inventory_link: NAME
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 30b3068264ff400baf429a6fa22098fa
+              expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/system.name,#1)<>last(/Ubiquiti Unifi USW Pro Switch SNMP/system.name,#2)'
+              name: 'Unifi Switch Pro: System name has changed'
+              event_name: 'Unifi Switch Pro: System name has changed (new name: {ITEM.LASTVALUE1})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: a9fe8fb690ee4c6881549815f01c065b
+          name: 'Uptime (network)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.3.0]'
+          key: 'system.net.uptime[sysUpTime.0]'
+          delay: 30s
+          value_type: FLOAT
+          trends: '0'
+          units: uptime
+          description: 'SNMPv2-MIB::sysUpTime.0'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: fd0f3eb9eb9a413db74e825c8256685f
+              expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/system.net.uptime[sysUpTime.0])>0 and last(/Ubiquiti Unifi USW Pro Switch SNMP/system.net.uptime[sysUpTime.0])<600'
+              name: 'Unifi Switch Pro: Device has been restarted'
+              opdata: 'Uptime: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 5c83427bb5ef4f25960a4cb0648cd277
+          name: 'System object ID'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.2.0]'
+          key: 'system.objectid[sysObjectID.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysObjectID.0'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: bd6991e9d37b4410b15cdfc8ad16038d
+          name: 'Firmware version'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.1.13.0]'
+          key: system.sw.version
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'Enterprise 4413 - firmware version'
+          inventory_link: SOFTWARE_APP_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 06e14924993c4547bd2a72b84b92d6b5
+              expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/system.sw.version,#1)<>last(/Ubiquiti Unifi USW Pro Switch SNMP/system.sw.version,#2)'
+              name: 'Unifi Switch Pro: Firmware version has changed'
+              event_name: 'Unifi Switch Pro: Firmware version has changed (new version: {ITEM.LASTVALUE1})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 48f1704ac4d6403eb9e93119ab3ec6ce
+          name: 'Memory: Free'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.4.1.0]'
+          key: vm.memory.free
+          units: B
+          description: 'Enterprise 4413 - free memory in KB, converted to bytes'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 4de8e3d365e1478da6eb28bb9ea44919
+          name: 'Memory: Total'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.4413.1.1.1.1.4.2.0]'
+          key: vm.memory.total
+          delay: 5m
+          units: B
+          description: 'Enterprise 4413 - total memory in KB, converted to bytes'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 54467d8681df490fb79207ec8a20de7b
+          name: 'Memory: Utilization'
+          type: CALCULATED
+          key: vm.memory.util
+          value_type: FLOAT
+          units: '%'
+          params: '(last(//vm.memory.total) - last(//vm.memory.free)) / last(//vm.memory.total) * 100'
+          description: 'Memory utilization: (total - free) / total * 100'
+          tags:
+            - tag: component
+              value: memory
+          triggers:
+            - uuid: b75c72e54eb042edbb0f15db7748d1d0
+              expression: 'min(/Ubiquiti Unifi USW Pro Switch SNMP/vm.memory.util,5m)>{$MEMORY.UTIL.MAX}'
+              name: 'Unifi Switch Pro: High memory utilization'
+              event_name: 'Unifi Switch Pro: High memory utilization (>{$MEMORY.UTIL.MAX}% for 5m)'
+              opdata: 'Current utilization: {ITEM.LASTVALUE1}%'
+              priority: AVERAGE
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: 39b3b7c3a0a34a399aae089c675ff6ba
+          name: 'SNMP agent availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          valuemap:
+            name: zabbix.host.available
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 16147c8fa412406882deca5d65810e49
+              expression: 'max(/Ubiquiti Unifi USW Pro Switch SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              name: 'Unifi Switch Pro: No SNMP data collection'
+              opdata: 'Current state: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Unifi Switch Pro: Unavailable by ICMP ping'
+                  expression: 'max(/Ubiquiti Unifi USW Pro Switch SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+      discovery_rules:
+        - uuid: 765b428776ff44f98fc5cf48062d036a
+          name: 'Network interfaces discovery'
+          type: DEPENDENT
+          key: net.if.discovery
+          delay: '0'
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '{$NET.IF.IFDESCR.MATCHES}'
+                formulaid: A
+              - macro: '{#IFDESCR}'
+                value: '{$NET.IF.IFDESCR.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+              - macro: '{#IFNAME}'
+                value: '{$NET.IF.IFNAME.MATCHES}'
+                formulaid: C
+              - macro: '{#IFNAME}'
+                value: '{$NET.IF.IFNAME.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: D
+          item_prototypes:
+            - uuid: 45e3026886c14c7d9f89242b542efe35
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets discarded'
+              type: DEPENDENT
+              key: 'net.if.in.discards[ifInDiscards.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifInDiscards'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.13.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: c5f76f9da3c44deeb43f3a735e59b3f0
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets with errors'
+              type: DEPENDENT
+              key: 'net.if.in.errors[ifInErrors.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifInErrors'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: d08b94556e0b479c915d787289629ca0
+                  expression: 'min(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.in.errors[ifInErrors.{#SNMPINDEX}],5m)>{$IF.ERRORS.WARN}'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): High inbound error rate'
+                  event_name: 'Interface {#IFNAME}({#IFALIAS}): High inbound error rate (>{$IF.ERRORS.WARN} for 5m)'
+                  opdata: 'Errors: {ITEM.LASTVALUE1}'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                      expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                      recovery_expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  tags:
+                    - tag: scope
+                      value: performance
+            - uuid: 96352c2b374043cbabcc7665987c3808
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits received'
+              type: DEPENDENT
+              key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              description: 'IF-MIB::ifHCInOctets - 64-bit input octet counter'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: bc0d108f39134590a293f9b4ddbaafee
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets discarded'
+              type: DEPENDENT
+              key: 'net.if.out.discards[ifOutDiscards.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifOutDiscards'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.19.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 8c55826dfec8492b86dfbc2b4581e1f7
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets with errors'
+              type: DEPENDENT
+              key: 'net.if.out.errors[ifOutErrors.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifOutErrors'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: 1bb8f39e768244c1a9b9829440016fa3
+                  expression: 'min(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.out.errors[ifOutErrors.{#SNMPINDEX}],5m)>{$IF.ERRORS.WARN}'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): High outbound error rate'
+                  event_name: 'Interface {#IFNAME}({#IFALIAS}): High outbound error rate (>{$IF.ERRORS.WARN} for 5m)'
+                  opdata: 'Errors: {ITEM.LASTVALUE1}'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                      expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                      recovery_expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  tags:
+                    - tag: scope
+                      value: performance
+            - uuid: 95d98f0e1f194855800b8bf6d7e3ae26
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits sent'
+              type: DEPENDENT
+              key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              description: 'IF-MIB::ifHCOutOctets - 64-bit output octet counter'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 228b5f0722b7408aa6b28cba49d869cb
+              name: 'Interface {#IFNAME}({#IFALIAS}): Speed'
+              type: DEPENDENT
+              key: 'net.if.speed[ifHighSpeed.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              units: bps
+              description: 'IF-MIB::ifHighSpeed - interface speed in Mbps, converted to bps'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.15.{#SNMPINDEX}'
+                    - '0'
+                - type: MULTIPLIER
+                  parameters:
+                    - '1000000'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: e853b76e3a4743e38e2db5202243a62c
+                  expression: 'change(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.speed[ifHighSpeed.{#SNMPINDEX}])<0 and last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.speed[ifHighSpeed.{#SNMPINDEX}])>0'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): Ethernet has changed to lower speed than expected'
+                  opdata: 'Current speed: {ITEM.LASTVALUE1}'
+                  priority: INFO
+                  manual_close: 'YES'
+                  tags:
+                    - tag: scope
+                      value: performance
+            - uuid: ab3a58bb96d340b2a95e74678901d5c8
+              name: 'Interface {#IFNAME}({#IFALIAS}): Admin status'
+              type: DEPENDENT
+              key: 'net.if.status[ifAdminStatus.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              description: 'IF-MIB::ifAdminStatus'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.7.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 1152652884e34b9eb18bdb21b5624187
+              name: 'Interface {#IFNAME}({#IFALIAS}): Operational status'
+              type: DEPENDENT
+              key: 'net.if.status[ifOperStatus.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              description: 'IF-MIB::ifOperStatus'
+              valuemap:
+                name: 'IF-MIB::ifOperStatus'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: f93b1c1f1d424c0b8037286b08cf0943
+                  expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                  opdata: 'Current state: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: scope
+                      value: availability
+          graph_prototypes:
+            - uuid: 30f6c812aa7a4c1a94f30edc6165aa62
+              name: 'Interface {#IFNAME}({#IFALIAS}): Network traffic'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Ubiquiti Unifi USW Pro Switch SNMP'
+                    key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  item:
+                    host: 'Ubiquiti Unifi USW Pro Switch SNMP'
+                    key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+          master_item:
+            key: net.if.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#IFOPERSTATUS}'
+                - 1.3.6.1.2.1.2.2.1.8
+                - '0'
+                - '{#IFADMINSTATUS}'
+                - 1.3.6.1.2.1.2.2.1.7
+                - '0'
+                - '{#IFALIAS}'
+                - 1.3.6.1.2.1.31.1.1.1.18
+                - '0'
+                - '{#IFNAME}'
+                - 1.3.6.1.2.1.31.1.1.1.1
+                - '0'
+                - '{#IFDESCR}'
+                - 1.3.6.1.2.1.2.2.1.2
+                - '0'
+                - '{#IFTYPE}'
+                - 1.3.6.1.2.1.2.2.1.3
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: 05831bc5d2924afb944d10b536a7d86b
+          name: 'Fan discovery'
+          type: DEPENDENT
+          key: sensor.fan.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: f7e86950b785475c9d3ca2895a997fdd
+              name: 'Fan {#SNMPINDEX}: Duty cycle'
+              type: DEPENDENT
+              key: 'sensor.fan.duty[{#SNMPINDEX}]'
+              delay: '0'
+              units: '%'
+              description: 'UnifiSwitch-BOXSERVICES-MIB - fan duty cycle percentage'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.4413.1.1.43.1.6.1.5.1.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: sensor.fan.walk
+              tags:
+                - tag: component
+                  value: fan
+            - uuid: e7c7a1a612304f138ba16aa20a31e6ce
+              name: 'Fan {#SNMPINDEX}: Speed'
+              type: DEPENDENT
+              key: 'sensor.fan.speed[{#SNMPINDEX}]'
+              delay: '0'
+              units: rpm
+              description: 'UnifiSwitch-BOXSERVICES-MIB - fan speed in RPM'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.4413.1.1.43.1.6.1.4.1.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: sensor.fan.walk
+              tags:
+                - tag: component
+                  value: fan
+            - uuid: 4d0a1213cbb948ff92a8b1fab022282e
+              name: 'Fan {#SNMPINDEX}: Status'
+              type: DEPENDENT
+              key: 'sensor.fan.status[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UnifiSwitch-BOXSERVICES-MIB - fan operational status (1=inactive, 2=operational)'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.4413.1.1.43.1.6.1.3.1.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: sensor.fan.walk
+              tags:
+                - tag: component
+                  value: fan
+              trigger_prototypes:
+                - uuid: 74a77f01495a4b448ab1f7a1b17165cc
+                  expression: 'last(/Ubiquiti Unifi USW Pro Switch SNMP/sensor.fan.status[{#SNMPINDEX}])=1'
+                  name: 'Fan {#SNMPINDEX}: Not operational'
+                  opdata: 'Current state: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  tags:
+                    - tag: scope
+                      value: availability
+          graph_prototypes:
+            - uuid: b3643b6902a54f04abac1229496e8aec
+              name: 'Fan {#SNMPINDEX}: Speed'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Ubiquiti Unifi USW Pro Switch SNMP'
+                    key: 'sensor.fan.speed[{#SNMPINDEX}]'
+          master_item:
+            key: sensor.fan.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#FAN_INDEX}'
+                - 1.3.6.1.4.1.4413.1.1.43.1.6.1.1.1
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: 50b1f869af7f44d2b7f4f2e9f3fe8fed
+          name: 'Temperature sensor discovery'
+          type: DEPENDENT
+          key: sensor.temp.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: 1f88357ceab04dd387e92a96e229b161
+              name: 'Temperature sensor {#SNMPINDEX}'
+              type: DEPENDENT
+              key: 'sensor.temp.value[{#SNMPINDEX}]'
+              delay: '0'
+              value_type: FLOAT
+              units: °C
+              description: 'UnifiSwitch-BOXSERVICES-MIB - temperature sensor reading'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.4413.1.1.43.1.8.1.5.1.{#SNMPINDEX}'
+                    - '0'
+              master_item:
+                key: sensor.temp.walk
+              tags:
+                - tag: component
+                  value: temperature
+              trigger_prototypes:
+                - uuid: 5bbf16bfe4b24f23beffe08ecaf6a44a
+                  expression: 'avg(/Ubiquiti Unifi USW Pro Switch SNMP/sensor.temp.value[{#SNMPINDEX}],5m)>{$TEMP.MAX.CRIT}'
+                  name: 'Temperature sensor {#SNMPINDEX}: Critical (>{$TEMP.MAX.CRIT}°C)'
+                  opdata: 'Current: {ITEM.LASTVALUE1}°C'
+                  priority: HIGH
+                  dependencies:
+                    - name: 'Temperature sensor {#SNMPINDEX}: Warning (>{$TEMP.MAX.WARN}°C)'
+                      expression: 'avg(/Ubiquiti Unifi USW Pro Switch SNMP/sensor.temp.value[{#SNMPINDEX}],5m)>{$TEMP.MAX.WARN}'
+                  tags:
+                    - tag: scope
+                      value: performance
+                - uuid: b1051ddd75304fd9b548b0179e7dde9d
+                  expression: 'avg(/Ubiquiti Unifi USW Pro Switch SNMP/sensor.temp.value[{#SNMPINDEX}],5m)>{$TEMP.MAX.WARN}'
+                  name: 'Temperature sensor {#SNMPINDEX}: Warning (>{$TEMP.MAX.WARN}°C)'
+                  opdata: 'Current: {ITEM.LASTVALUE1}°C'
+                  priority: WARNING
+                  tags:
+                    - tag: scope
+                      value: performance
+          master_item:
+            key: sensor.temp.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#SENSOR_INDEX}'
+                - 1.3.6.1.4.1.4413.1.1.43.1.8.1.2.1
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+      tags:
+        - tag: class
+          value: network-switch
+        - tag: protocol
+          value: snmp
+        - tag: vendor
+          value: Ubiquiti
+      macros:
+        - macro: '{$CPU.UTIL.CRIT}'
+          value: '90'
+          description: 'CPU utilization critical threshold (%)'
+        - macro: '{$ICMP_LOSS_WARN}'
+          value: '20'
+          description: 'ICMP packet loss warning threshold (%)'
+        - macro: '{$ICMP_RESPONSE_TIME_WARN}'
+          value: '0.15'
+          description: 'ICMP response time warning threshold (s)'
+        - macro: '{$IF.ERRORS.WARN}'
+          value: '2'
+          description: 'Interface errors per interval warning threshold'
+        - macro: '{$IFCONTROL}'
+          value: '1'
+          description: 'Link down trigger control (1=enabled, 0=disabled)'
+        - macro: '{$MEMORY.UTIL.MAX}'
+          value: '90'
+          description: 'Memory utilization warning threshold (%)'
+        - macro: '{$NET.IF.IFDESCR.MATCHES}'
+          value: '.*'
+          description: 'Regex for interface descriptions to include'
+        - macro: '{$NET.IF.IFDESCR.NOT_MATCHES}'
+          value: DOES_NOT_MATCH
+          description: 'Regex for interface descriptions to exclude'
+        - macro: '{$NET.IF.IFNAME.MATCHES}'
+          value: ^0/
+          description: 'Regex for interface names to include (physical ports 0/x)'
+        - macro: '{$NET.IF.IFNAME.NOT_MATCHES}'
+          value: DOES_NOT_MATCH
+          description: 'Regex for interface names to exclude'
+        - macro: '{$SNMP.TIMEOUT}'
+          value: 5m
+          description: 'SNMP unavailability timeout'
+        - macro: '{$TEMP.MAX.CRIT}'
+          value: '80'
+          description: 'Temperature critical threshold (C)'
+        - macro: '{$TEMP.MAX.WARN}'
+          value: '65'
+          description: 'Temperature warning threshold (C)'
+      valuemaps:
+        - uuid: 3aab9b4d866046068d93bf7039e09c65
+          name: 'IF-MIB::ifOperStatus'
+          mappings:
+            - value: '1'
+              newvalue: up
+            - value: '2'
+              newvalue: down
+            - value: '3'
+              newvalue: testing
+            - value: '4'
+              newvalue: unknown
+            - value: '5'
+              newvalue: dormant
+            - value: '6'
+              newvalue: notPresent
+            - value: '7'
+              newvalue: lowerLayerDown
+        - uuid: feae78b06605468aa633254994450447
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+        - uuid: b68425a9275c40d29c4cf5561fc8d34a
+          name: zabbix.host.available
+          mappings:
+            - value: '0'
+              newvalue: 'not available'
+            - value: '1'
+              newvalue: available
+            - value: '2'
+              newvalue: unknown
+  graphs:
+    - uuid: 5197f982457743559685760efbfe6a04
+      name: 'CPU utilization'
+      ymin_type_1: FIXED
+      ymax_type_1: FIXED
+      graph_items:
+        - color: 1A7C11
+          item:
+            host: 'Ubiquiti Unifi USW Pro Switch SNMP'
+            key: system.cpu.util
+        - sortorder: '1'
+          color: 2774A4
+          item:
+            host: 'Ubiquiti Unifi USW Pro Switch SNMP'
+            key: system.cpu.util.5min
+    - uuid: f9228a4526c947f89a0ffe20da0a4835
+      name: 'Memory utilization'
+      ymin_type_1: FIXED
+      ymax_type_1: FIXED
+      graph_items:
+        - color: 199C0D
+          item:
+            host: 'Ubiquiti Unifi USW Pro Switch SNMP'
+            key: vm.memory.util

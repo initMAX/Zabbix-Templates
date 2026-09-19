@@ -1,0 +1,634 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>Zabbix Notification</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&amp;display=swap" rel="stylesheet">
+    <!-- <link rel="stylesheet" href="css/foundation-emails.css" /> -->
+    <style type="text/css">
+        @media only screen {
+            html, body {
+                min-height: 100%;
+                background: #f5f5f5;
+            }
+        }
+
+        :root {
+            color-scheme: light dark;
+        }
+
+        body {
+            width: 100% !important;
+            font-family: 'Rubik', sans-serif;
+            font-size: 18px;
+            min-width: 100%;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            -moz-box-sizing: border-box;
+            -webkit-box-sizing: border-box;
+            background: #f5f5f5;
+            color: #111111;
+        }
+
+        .container {
+            min-width: 250px;
+            max-width: 800px;
+
+            display: flex;
+            flex-direction: column;
+            row-gap: 20px;
+
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+
+            padding: 32px;
+            margin: auto;
+
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .problem-box,
+        .severity-bar {
+            display: flex;
+
+            font-weight: 500;
+            font-size: 22px;
+
+            padding: 12px 10px;
+            column-gap: 10px;
+
+            border-radius: 8px;
+
+            color: #000;
+            background-color: #ccc;
+        }
+
+        .problem-box.severity-0,
+        .severity-bar.severity-0 {
+            background-color: #97AAB3 !important;
+        }
+        .problem-box.severity-1,
+        .severity-bar.severity-1 {
+            background-color: #7499FF !important;
+        }
+        .problem-box.severity-2,
+        .severity-bar.severity-2 {
+            background-color: #FFC859 !important;
+            color: #000 !important;
+        }
+        .problem-box.severity-3,
+        .severity-bar.severity-3 {
+            background-color: #FFA059 !important;
+            color: #000 !important;
+        }
+        .problem-box.severity-4,
+        .severity-bar.severity-4 {
+            background-color: #E97659 !important;
+            color: #000 !important;
+        }
+        .problem-box.severity-5,
+        .severity-bar.severity-5 {
+            background-color: #E45959 !important;
+            color: #fff !important;
+        }
+
+        .problem-logo {
+            max-width: 100px;
+            height: auto;
+
+            margin-left: auto;
+
+            right: 10px;
+        }
+
+        .logo-dark {
+            display: none;
+        }
+
+        .info-table {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .trigger-description {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .trigger-description:has(.value:empty) {
+            display: none;
+        }
+
+        .tags-block {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .tags-block:has(.value:empty) {
+            display: none;
+        }
+
+        .tags-block .label {
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .tags-block .value {
+            display: block;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        .tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #f0f0f0;
+            color: #111111;
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid #e0e0e0;
+        }
+
+        .item-only {
+            display: block;
+        }
+
+        .item-only.hidden {
+            display: none !important;
+        }
+
+        .latest-data {
+            display: none !important;
+        }
+
+        .buttons-row.host-row[data-item2="*UNKNOWN*"][data-valuetype="0"] .latest-data.graph,
+        .buttons-row.host-row[data-item2="*UNKNOWN*"][data-valuetype="3"] .latest-data.graph,
+        .buttons-row.host-row[data-item2=""][data-valuetype="0"] .latest-data.graph,
+        .buttons-row.host-row[data-item2=""][data-valuetype="3"] .latest-data.graph {
+            display: block !important;
+        }
+
+        .buttons-row.host-row[data-item2="*UNKNOWN*"][data-valuetype="1"] .latest-data.values,
+        .buttons-row.host-row[data-item2="*UNKNOWN*"][data-valuetype="2"] .latest-data.values,
+        .buttons-row.host-row[data-item2="*UNKNOWN*"][data-valuetype="4"] .latest-data.values,
+        .buttons-row.host-row[data-item2=""][data-valuetype="1"] .latest-data.values,
+        .buttons-row.host-row[data-item2=""][data-valuetype="2"] .latest-data.values,
+        .buttons-row.host-row[data-item2=""][data-valuetype="4"] .latest-data.values {
+            display: block !important;
+        }
+        .buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .buttons-row {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .event-link {
+            display: block;
+
+            text-align: center;
+            padding: 10px 20px;
+
+            border-radius: 10px;
+
+            font-weight: 500;
+            font-size: 22px;
+            text-decoration: none;
+            white-space: nowrap;
+
+            background-color: #007bff;
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        .event-link:link,
+        .event-link:visited,
+        .event-link span {
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        .event-link:hover {
+            background-color: #0056b3;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 16px;
+            color: #777;
+        }
+
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .label {
+            font-weight: bold;
+            padding: 4px 2px;
+        }
+
+        /* Dark mode theme */
+        @media (prefers-color-scheme: dark) {
+            html, body {
+                background: #222222 !important;
+            }
+
+            body {
+                color: #f2f2f2 !important;
+            }
+
+            .container {
+                background: #2b2b2b !important;
+                border-color: #3a3a3a !important;
+            }
+
+            .label {
+                color: #f2f2f2 !important;
+            }
+
+            .event-link {
+                color: #ffffff !important;
+            }
+
+            .footer {
+                color: #cfcfcf !important;
+            }
+
+            .footer a {
+                color: #7db7ff !important;
+            }
+
+            .logo-light {
+                display: none !important;
+            }
+
+            .logo-dark {
+                display: block !important;
+            }
+
+            /* Force readable text on severity bars in dark mode */
+            .problem-box,
+            .severity-bar {
+                color: #ffffff !important;
+            }
+
+            .tag {
+                background: #3a3a3a !important;
+                color: #f2f2f2 !important;
+                border-color: #4a4a4a !important;
+            }
+
+        }
+
+        [data-ogsc] body,
+        [data-ogsb] body {
+            background: #222222 !important;
+            color: #f2f2f2 !important;
+        }
+
+        [data-ogsc] .container,
+        [data-ogsb] .container {
+            background: #2b2b2b !important;
+            border-color: #3a3a3a !important;
+        }
+
+        [data-ogsc] .label,
+        [data-ogsb] .label {
+            color: #f2f2f2 !important;
+        }
+
+        [data-ogsc] .event-link,
+        [data-ogsb] .event-link {
+            color: #ffffff !important;
+        }
+
+        [data-ogsc] .footer,
+        [data-ogsb] .footer {
+            color: #cfcfcf !important;
+        }
+
+        [data-ogsc] .footer a,
+        [data-ogsb] .footer a {
+            color: #7db7ff !important;
+        }
+
+        [data-ogsc] .logo-light,
+        [data-ogsb] .logo-light {
+            display: none !important;
+        }
+
+        [data-ogsc] .logo-dark,
+        [data-ogsb] .logo-dark {
+            display: block !important;
+        }
+
+        [data-ogsc] .problem-box,
+        [data-ogsb] .problem-box,
+        [data-ogsc] .severity-bar,
+        [data-ogsb] .severity-bar {
+            color: #ffffff !important;
+        }
+
+        [data-ogsc] .tag,
+        [data-ogsb] .tag {
+            background: #3a3a3a !important;
+            color: #f2f2f2 !important;
+            border-color: #4a4a4a !important;
+        }
+
+
+        /* Responsive design */
+        @media (min-width: 500px) {
+            .problem-box {
+                position: relative;
+                text-align: center;
+                padding-right: 10px;
+            }
+
+            .problem-logo {
+                position: absolute;
+
+                max-width: 100px;
+                height: auto;
+
+                margin-top: auto;
+                margin-bottom: auto;
+
+                right: 10px;
+            }
+
+            .info-table {
+                grid-template-columns: 1fr 2fr;
+            }
+
+            .severity-bar {
+                justify-content: center;
+            }
+
+            .buttons-container {
+                flex-direction: column;
+            }
+
+            .buttons-row {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+
+            .buttons-row.host-row {
+                flex-wrap: wrap;
+            }
+        }
+
+        @media (min-width: 700px) {
+            .buttons-row.host-row {
+                flex-wrap: nowrap;
+            }
+        }
+
+        /* Outlook-safe table layout overrides */
+        .container {
+            display: table !important;
+            width: 100% !important;
+            max-width: 800px !important;
+            box-sizing: border-box !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+        }
+
+        .container-cell {
+            display: table-cell !important;
+        }
+
+        .problem-box,
+        .problem-box.severity-0,
+        .problem-box.severity-1,
+        .problem-box.severity-2,
+        .problem-box.severity-3,
+        .problem-box.severity-4,
+        .problem-box.severity-5 {
+            display: table !important;
+            width: 100% !important;
+            table-layout: auto !important;
+        }
+
+        .problem-box {
+            padding: 0 !important;
+            position: static !important;
+            text-align: center !important;
+            table-layout: fixed !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+        }
+
+        .severity-bar {
+            display: table !important;
+            width: 100% !important;
+            table-layout: fixed !important;
+            padding: 0 !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+        }
+
+        .problem-box tr:first-child td:first-child { border-radius: 8px 0 0 8px !important; }
+        .problem-box tr:first-child td:last-child { border-radius: 0 8px 8px 0 !important; }
+        .severity-bar td { border-radius: 8px !important; }
+        .problem-logo {
+            position: static !important;
+            right: auto !important;
+            margin: 0 auto !important;
+        }
+
+        .problem-box td,
+        .problem-box.severity-0 td,
+        .problem-box.severity-1 td,
+        .problem-box.severity-2 td,
+        .problem-box.severity-3 td,
+        .problem-box.severity-4 td,
+        .problem-box.severity-5 td,
+        .severity-bar.severity-0 td,
+        .severity-bar.severity-1 td,
+        .severity-bar.severity-2 td,
+        .severity-bar.severity-3 td,
+        .severity-bar.severity-4 td,
+        .severity-bar.severity-5 td {
+            background-color: inherit !important;
+        }
+
+        .problem-box.severity-0,
+        .problem-box.severity-0 td,
+        .severity-bar.severity-0,
+        .severity-bar.severity-0 td { background-color: #97AAB3 !important; }
+        .problem-box.severity-1,
+        .problem-box.severity-1 td,
+        .severity-bar.severity-1,
+        .severity-bar.severity-1 td { background-color: #7499FF !important; }
+        .problem-box.severity-2,
+        .problem-box.severity-2 td,
+        .severity-bar.severity-2,
+        .severity-bar.severity-2 td { background-color: #FFC859 !important; }
+        .problem-box.severity-3,
+        .problem-box.severity-3 td,
+        .severity-bar.severity-3,
+        .severity-bar.severity-3 td { background-color: #FFA059 !important; }
+        .problem-box.severity-4,
+        .problem-box.severity-4 td,
+        .severity-bar.severity-4,
+        .severity-bar.severity-4 td { background-color: #E97659 !important; }
+        .problem-box.severity-5,
+        .problem-box.severity-5 td,
+        .severity-bar.severity-5,
+        .severity-bar.severity-5 td { background-color: #E45959 !important; }
+
+        .info-table {
+            display: table !important;
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: separate !important;
+            border-spacing: 0 8px !important;
+        }
+
+        .info-table tr { display: table-row !important; }
+        .info-table td {
+            display: table-cell !important;
+            vertical-align: top !important;
+        }
+
+        .info-table td.label {
+            width: 33.333% !important;
+            padding: 4px 2px !important;
+        }
+
+        .buttons-container {
+            display: table !important;
+            width: 100% !important;
+            table-layout: fixed !important;
+        }
+
+        .buttons-row {
+            display: table-row !important;
+            width: 100% !important;
+        }
+
+        .buttons-row .button-cell {
+            display: table-cell !important;
+            vertical-align: top !important;
+            padding: 0 10px 20px 0 !important;
+        }
+
+        .buttons-row .button-cell:last-child { padding-right: 0 !important; }
+        .buttons-row.host-row .button-cell { width: 33.333% !important; }
+        .buttons-container tr:first-child .button-cell { padding-top: 20px !important; }
+        .event-link { display: block !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; box-sizing: border-box !important; flex: none !important; white-space: normal !important; }
+        .latest-data { display: none !important; }
+        .latest-data.graph-item,
+        .latest-data.values-item { display: block !important; }
+        .latest-data.multi-item { display: none !important; }
+        .tags-block { display: none !important; }
+        .tags-block.has-tags { display: block !important; }
+        .trigger-description { display: none !important; }
+        .trigger-description.has-description { display: table !important; }
+    </style>
+</head>
+<body>
+    <table role="presentation" class="container" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+            <td class="container-cell" style="padding:32px;">
+        <!-- "Problem detected" box with initMAX logo on the right -->
+        <table role="presentation" class="problem-box severity-{EVENT.NSEVERITY}" width="100%" cellpadding="0" cellspacing="0" border="0" style="display:table; width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; border-radius:8px; overflow:hidden; margin:0; mso-table-lspace:0pt; mso-table-rspace:0pt;">
+            <tr>
+                <td width="120" style="width:120px; font-size:0; line-height:0; border-radius:8px 0 0 8px;">&nbsp;</td>
+                <td style="padding:12px 0; text-align:center; font-weight:500; font-size:22px; white-space:nowrap;">Problem detected</td>
+                <td width="120" align="center" valign="middle" style="width:120px; text-align:center; vertical-align:middle; border-radius:0 8px 8px 0;">
+                    <img class="problem-logo logo-light" src="https://www.initmax.cz/wp-content/uploads/2022/02/initmax_digital_horizontal_nasvetlepozadi.svg" alt="initMAX s.r.o. logo" width="100" style="display:block; width:100px; max-width:100px; height:auto; position:static; right:auto; margin:0 auto;">
+                    <img class="problem-logo logo-dark" src="https://www.initmax.cz/wp-content/uploads/2022/02/initmax_digital_horizontal_natmavepozadi.svg" alt="initMAX s.r.o. logo" width="100" style="display:none; width:100px; max-width:100px; height:auto; position:static; right:auto; margin:0 auto;">
+                </td>
+            </tr>
+        </table>
+
+        <!-- Information table -->
+        <table role="presentation" class="info-table" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr><td class="label">Problem name:</td><td>{{EVENT.NAME}.htmlencode()}</td></tr>
+
+            <tr><td class="label">Problem started:</td><td>at {{EVENT.TIME}.htmlencode()} on&nbsp;{{EVENT.DATE}.htmlencode()}</td></tr>
+
+            <tr><td class="label">Host:</td><td>{{HOST.NAME}.htmlencode()}</td></tr>
+
+            <tr><td class="label">Connection info:</td><td>{{HOST.CONN}.htmlencode()}</td></tr>
+
+            <tr><td class="label">Operational data:</td><td>{{EVENT.OPDATA}.htmlencode()}</td></tr>
+
+            <tr><td class="label">Original problem ID:</td><td>{{EVENT.ID}.htmlencode()}</td></tr>
+        </table>
+
+        <!-- Event tags (shown only when defined) -->
+        <div class='tags-block{{EVENT.TAGS}.regsub("(?s).*\S.*"," has-tags")}' style="text-align:center; padding:10px 0;">
+            <span class="label">Tags:</span>
+            <span class="value">{{EVENT.TAGS}.htmlencode()}</span>
+        </div>
+
+        <!-- Severity bar -->
+        <table role="presentation" class="severity-bar severity-{EVENT.NSEVERITY}" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr><td style="padding:12px 10px; text-align:center; font-weight:500; font-size:22px;">{{EVENT.SEVERITY}.htmlencode()}</td></tr>
+        </table>
+
+        <!-- Trigger description: rendered only when it contains non-whitespace text -->
+        <table role="presentation" class='trigger-description{{TRIGGER.DESCRIPTION}.regsub("(?s).*\S.*"," has-description")}' width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                <td colspan="2" style="padding:10px 0; text-align:center;">
+                    <span class="label" style="display:block; margin-bottom:6px;">Trigger description:</span>
+                    <span class="value" style="display:block; white-space:pre-line;">{{TRIGGER.DESCRIPTION}.htmlencode()}</span>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Buttons: View event and Acknowledge -->
+        <table role="presentation" class="buttons-container" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr class="buttons-row">
+                <td class="button-cell" colspan="3" width="50%"><a class="event-link" href="{$ZABBIX.URL}/tr_events.php?triggerid={TRIGGER.ID}&amp;eventid={EVENT.ID}" target="_blank" style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;"><span style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;">View event</span></a></td>
+                <td class="button-cell" colspan="3" width="50%"><a class="event-link" href="{$ZABBIX.URL}/zabbix.php?name={{EVENT.NAME}.urlencode()}&amp;action=problem.view" target="_blank" style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;"><span style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;">Problems page</span></a></td>
+            </tr>
+            <tr class="buttons-row host-row" data-item2="{ITEM.ID2}" data-valuetype="{ITEM.VALUETYPE}">
+                <td class="button-cell" colspan="2" width="33%"><a class="event-link" href="{$ZABBIX.URL}/hostinventories.php?hostid={HOST.ID}" target="_blank" style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;"><span style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;">Host inventory</span></a></td>
+                <td class="button-cell" colspan="2" width="33%"><a class="event-link" href="{$ZABBIX.URL}/zabbix.php?action=charts.view&amp;filter_hostids%5B0%5D={HOST.ID}&amp;filter_show=0&amp;filter_set=1" target="_blank" style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;"><span style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;">Host graphs</span></a></td>
+                <td class="button-cell" colspan="2" width="33%">
+                    <a class='event-link item-only latest-data graph{{ITEM.ID2}.regsub("^[0-9]+$"," multi-item")}{{ITEM.VALUETYPE}.regsub("^(0|3)$"," graph-item")}' href="{$ZABBIX.URL}/history.php?action=showgraph&amp;itemids%5B%5D={ITEM.ID1}" target="_blank" style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;"><span style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;">Latest data</span></a>
+                    <a class='event-link item-only latest-data values{{ITEM.ID2}.regsub("^[0-9]+$"," multi-item")}{{ITEM.VALUETYPE}.regsub("^(1|2|4)$"," values-item")}' href="{$ZABBIX.URL}/history.php?action=showvalues&amp;itemids%5B%5D={ITEM.ID1}" target="_blank" style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;"><span style="color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;">Latest data</span></a>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Footer -->
+        <div class="footer">
+            Developed by <a href="https://www.initmax.com" target="_blank">initMAX s.r.o.</a>
+        </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
