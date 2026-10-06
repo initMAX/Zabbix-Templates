@@ -1,0 +1,655 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 1e6d70c5ed6b4100aaf873c99f7aa740
+      template: 'AD Group Sync by Zabbix agent'
+      name: 'AD Group Sync by Zabbix agent'
+      description: |
+        Synchronizes Active Directory security groups into Zabbix user groups and into the
+        provisioning group mappings of a user directory (LDAP/SAML/JIT provisioning).
+
+        The template is generic: the searched AD container, the Zabbix API endpoint, the API
+        token, the target user directory and the assigned roles are all user macros.
+
+        How it works:
+          1. "Get AD groups" reads the group list over WMI from the LDAP namespace of the
+             monitored Windows host (a domain controller or any domain member).
+          2. "Synchronize AD groups" (dependent item, JavaScript) compares the list with Zabbix,
+             creates the missing user groups and adds the missing provisioning mappings.
+             Existing groups and mappings are never renamed or removed. At most
+             {$AD.SYNC.CREATE.LIMIT} groups are created per run; the rest follows in the next runs.
+          3. The dependent items below expose the result as numbers for graphs and triggers.
+
+        Requirements:
+          - Zabbix agent 7.0 or newer on a domain member that can query AD over WMI
+            (root\directory\ldap namespace). Older agents ignore the item timeout and give up
+            after their own 3 seconds, which a directory query may exceed.
+          - The Zabbix server, or the proxy that monitors the host, must reach {$AD.SYNC.API.URL}:
+            the script runs as a preprocessing step on whichever of them collects the item.
+          - A Zabbix API token with permission to create user groups and update the user
+            directory (Super admin role). Store it in {$AD.SYNC.API.TOKEN} as secret text and
+            create it for a dedicated user: the token is sent to whatever URL {$AD.SYNC.API.URL}
+            holds, so the right to change that macro on the host belongs to administrators only.
+          - The user directory must already exist with JIT provisioning enabled; this template
+            only maintains its provisioning groups.
+
+        Set {$AD.SYNC.DRY_RUN} to 1 for the first run - nothing is written and the result item
+        shows what would be created.
+
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 7f2afac61f5c420bb3a2a024301dccee
+          name: 'Get AD groups'
+          key: 'wmi.getall["{$AD.SYNC.LDAP.NAMESPACE}","select DS_name from DS_Group where ADSIPath like ''{$AD.SYNC.LDAP.ADSIPATH}''"]'
+          delay: '{$AD.SYNC.INTERVAL}'
+          history: 1h
+          value_type: TEXT
+          trends: '0'
+          description: |
+            Raw list of AD security groups in the container defined by {$AD.SYNC.LDAP.ADSIPATH},
+            read over WMI from the LDAP namespace. Master item for everything below.
+          timeout: '{$AD.SYNC.TIMEOUT}'
+          tags:
+            - tag: component
+              value: raw
+          triggers:
+            - uuid: 5d6a3c8f21b74b0d9c1e7a4f6b02d3ce
+              expression: 'nodata(/AD Group Sync by Zabbix agent/wmi.getall["{$AD.SYNC.LDAP.NAMESPACE}","select DS_name from DS_Group where ADSIPath like ''{$AD.SYNC.LDAP.ADSIPATH}''"],{$AD.SYNC.NODATA})=1'
+              name: 'AD Group Sync: Failed to fetch AD group data'
+              event_name: 'AD Group Sync: Failed to fetch AD group data (no data for {$AD.SYNC.NODATA})'
+              priority: WARNING
+              description: |
+                The WMI query returned no data for {$AD.SYNC.NODATA}. Typical causes: the agent is
+                down, the account running the agent lost the right to read the directory, or the
+                container in {$AD.SYNC.LDAP.ADSIPATH} no longer exists.
+                Acknowledge to close the problem manually.
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 2f98fbbd6be04f4bb5b8a1c3c5dddfae
+          name: 'Number of AD groups'
+          type: DEPENDENT
+          key: ad.groups.count
+          delay: '0'
+          description: 'Number of AD groups found in the monitored container.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // The WMI query returns a JSON array; an empty result is an empty string.
+                  if (!value || value.trim() === '') {
+                    return 0;
+                  }
+                  return JSON.parse(value).length;
+          master_item:
+            key: 'wmi.getall["{$AD.SYNC.LDAP.NAMESPACE}","select DS_name from DS_Group where ADSIPath like ''{$AD.SYNC.LDAP.ADSIPATH}''"]'
+          tags:
+            - tag: component
+              value: application
+          triggers:
+            - uuid: 31d0dbfb10e44a4999fa41d707afdfa9
+              expression: 'change(/AD Group Sync by Zabbix agent/ad.groups.count)<>0'
+              name: 'AD Group Sync: Number of AD groups changed'
+              event_name: 'AD Group Sync: Number of AD groups changed (now {ITEM.VALUE})'
+              priority: INFO
+              description: |
+                A group was added to or removed from the monitored container. Informational by
+                design - the sync item reacts to the change on its own; this trigger only makes
+                the change visible in the event history.
+                Acknowledge to close the problem manually.
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 9344b529aa124ad8ab4f603bd4d70120
+          name: 'Synchronize AD groups'
+          type: DEPENDENT
+          key: ad.groups.sync
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          description: |
+            Creates the missing Zabbix user groups and provisioning mappings, then returns the
+            result as JSON: created groups, added mappings, the role each mapping received,
+            groups still waiting (pending_groups), errors and the run time.
+            Honours {$AD.SYNC.DRY_RUN} and creates at most {$AD.SYNC.CREATE.LIMIT} groups per run.
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // AD group synchronization into Zabbix user groups and provisioning mappings.
+                  // Originally written 1. 12. 2025, initMAX - Alois Zadrazil.
+                  // Generalized: every environment-specific value comes from a user macro.
+
+                  // ---------------------------------------------------------------- configuration
+                  var CONFIG = {
+                    url: '{$AD.SYNC.API.URL}',                  // Zabbix API endpoint
+                    token: '{$AD.SYNC.API.TOKEN}',              // API token (secret text macro)
+                    directory: '{$AD.SYNC.USERDIRECTORY}',      // user directory name, empty = the first one
+                    roleDefault: '{$AD.SYNC.ROLE.DEFAULT}',     // role for a regular group
+                    roleAdmin: '{$AD.SYNC.ROLE.ADMIN}',         // role for groups matching the pattern below
+                    adminMatches: '{$AD.SYNC.ROLE.ADMIN.MATCHES}', // regular expression selecting admin groups
+                    groupPrefix: '{$AD.SYNC.USERGROUP.PREFIX}', // optional prefix of created user groups
+                    ignoreMatches: '{$AD.SYNC.USERGROUP.IGNORE}', // user groups excluded from the orphan report
+                    createLimit: '{$AD.SYNC.CREATE.LIMIT}',     // max. user groups created in one run
+                    dryRun: '{$AD.SYNC.DRY_RUN}' === '1',       // 1 = report only, write nothing
+                    debug: '{$AD.SYNC.DEBUG}' === '1'           // 1 = log every API call
+                  };
+
+                  var request = new HttpRequest();
+                  request.addHeader('Content-Type: application/json');
+                  request.addHeader('Authorization: Bearer ' + CONFIG.token);
+
+                  function log(message) {
+                    if (CONFIG.debug) {
+                      Zabbix.log(4, '[ AD Group Sync ] ' + message);
+                    }
+                  }
+
+                  // One place for every API call: sends the request, checks the HTTP status and
+                  // turns a JSON-RPC error into a readable exception.
+                  function api(method, params) {
+                    var payload = JSON.stringify({jsonrpc: '2.0', method: method, params: params, id: 1});
+                    log(method + ' -> ' + payload.substring(0, 300));
+
+                    var raw = request.post(CONFIG.url, payload);
+                    if (request.getStatus() !== 200) {
+                      throw method + ': HTTP ' + request.getStatus();
+                    }
+
+                    var response = JSON.parse(raw);
+                    if (response.error) {
+                      throw method + ': ' + response.error.message + ' ' + (response.error.data || '');
+                    }
+                    return response.result;
+                  }
+
+                  function findByKey(list, key, needle) {
+                    for (var i = 0; i < list.length; i++) {
+                      if (list[i][key] === needle) {
+                        return list[i];
+                      }
+                    }
+                    return null;
+                  }
+
+                  // Zabbix user groups that no longer have a counterpart in AD.
+                  //
+                  // Reported only, never deleted - removing a user group would also remove the
+                  // permissions and the users' membership. Two filters keep the list meaningful:
+                  //   - with {$AD.SYNC.USERGROUP.PREFIX} set, only groups carrying that prefix are
+                  //     considered, because the others were never created by this sync;
+                  //   - names matching {$AD.SYNC.USERGROUP.IGNORE} are skipped, which is how the
+                  //     built-in Zabbix groups and any manually maintained group stay out of it.
+                  function findOrphanGroups(userGroups, adNames) {
+                    var ignore = CONFIG.ignoreMatches === '' ? null : new RegExp(CONFIG.ignoreMatches),
+                      orphans = [];
+
+                    for (var i = 0; i < userGroups.length; i++) {
+                      var name = userGroups[i].name;
+
+                      if (CONFIG.groupPrefix !== '' && name.indexOf(CONFIG.groupPrefix) !== 0) {
+                        continue;
+                      }
+                      if (ignore !== null && ignore.test(name)) {
+                        continue;
+                      }
+                      if (adNames.indexOf(name) === -1) {
+                        orphans.push(name);
+                      }
+                    }
+
+                    return orphans.sort();
+                  }
+
+                  // Role ids are instance specific, so they are resolved from the role NAME and
+                  // cached for the whole run.
+                  var roleCache = {};
+                  function roleId(name) {
+                    if (roleCache[name] === undefined) {
+                      var roles = api('role.get', {output: ['roleid', 'name'], filter: {name: [name]}});
+                      if (!roles.length) {
+                        throw 'role "' + name + '" does not exist';
+                      }
+                      roleCache[name] = roles[0].roleid;
+                    }
+                    return roleCache[name];
+                  }
+
+                  // ------------------------------------------------------------------ main program
+                  var started = Date.now(),
+                    result = {
+                      dry_run: CONFIG.dryRun,
+                      ad_groups: 0,
+                      created_groups: [],
+                      created_groups_count: 0,
+                      created_mappings: [],
+                      created_mappings_count: 0,
+                      pending_groups: 0,
+                      orphan_groups: [],
+                      orphan_groups_count: 0,
+                      error: ''
+                    };
+
+                  try {
+                    var limit = parseInt(CONFIG.createLimit, 10);
+                    if (isNaN(limit) || limit < 0) {
+                      // The macro name is written without its braces on purpose: Zabbix
+                      // resolves macros inside string literals too, and the message would
+                      // otherwise report the value instead of naming the macro.
+                      throw 'AD.SYNC.CREATE.LIMIT must be a non-negative number, got "' + CONFIG.createLimit + '"';
+                    }
+
+                    var adGroups = (!value || value.trim() === '') ? [] : JSON.parse(value);
+                    result.ad_groups = adGroups.length;
+
+                    // The WMI query returns objects with a DS_name property; keep the names only,
+                    // add the optional prefix and drop duplicates and empty entries.
+                    var wanted = [];
+                    for (var i = 0; i < adGroups.length; i++) {
+                      var name = adGroups[i].DS_name;
+                      if (name && wanted.indexOf(CONFIG.groupPrefix + name) === -1) {
+                        wanted.push(CONFIG.groupPrefix + name);
+                      }
+                    }
+
+                    // 1) Resolve the user directory FIRST, so a misconfigured name cannot
+                    //    leave the instance with half of the work done.
+                    var directories = api('userdirectory.get', {
+                      output: ['userdirectoryid', 'name', 'provision_status'],
+                      selectProvisionGroups: 'extend'
+                    });
+                    if (!directories.length) {
+                      throw 'no user directory is configured in Zabbix';
+                    }
+
+                    var directory = CONFIG.directory === ''
+                      ? directories[0]
+                      : findByKey(directories, 'name', CONFIG.directory);
+                    if (!directory) {
+                      throw 'user directory "' + CONFIG.directory + '" does not exist';
+                    }
+                    // The API accepts provisioning groups only while JIT provisioning is
+                    // enabled; without this check the groups would be created and the
+                    // mapping update would then fail with a validation message.
+                    if (String(directory.provision_status) !== '1') {
+                      throw 'user directory "' + directory.name + '" has JIT provisioning disabled';
+                    }
+                    result.userdirectory = directory.name;
+
+                    // Resolve both role ids before anything is written, for the same reason as
+                    // the directory: a misspelled role name must fail the run here, not leave
+                    // freshly created groups behind without their mapping.
+                    roleId(CONFIG.roleDefault);
+                    roleId(CONFIG.roleAdmin);
+
+                    // 2) Create the user groups Zabbix does not have yet, at most
+                    //    {$AD.SYNC.CREATE.LIMIT} of them per run. The whole script is one
+                    //    JavaScript preprocessing step and Zabbix aborts it after 10 seconds,
+                    //    which a first run over a large container would not fit into. The rest
+                    //    is counted in pending_groups and created by the following runs, so the
+                    //    estate converges over a few intervals instead of failing the item.
+                    var userGroups = api('usergroup.get', {output: ['usrgrpid', 'name']});
+                    for (var g = 0; g < wanted.length; g++) {
+                      if (findByKey(userGroups, 'name', wanted[g])) {
+                        continue;
+                      }
+                      if (limit > 0 && result.created_groups.length >= limit) {
+                        result.pending_groups++;
+                        continue;
+                      }
+                      result.created_groups.push(wanted[g]);
+                      if (!CONFIG.dryRun) {
+                        api('usergroup.create', {name: wanted[g]});
+                      }
+                    }
+
+                    // Re-read the groups so the new ones have their usrgrpid available.
+                    if (result.created_groups.length && !CONFIG.dryRun) {
+                      userGroups = api('usergroup.get', {output: ['usrgrpid', 'name']});
+                    }
+
+                    // 3) Add the missing mappings. Existing mappings are carried over untouched,
+                    //    because userdirectory.update replaces the whole provision_groups array.
+                    // mappings is the SAME array userdirectory.update will receive, so every
+                    // existing mapping is preserved; added is counted separately because
+                    // pushing into it also changes directory.provision_groups.
+                    var mappings = directory.provision_groups || [],
+                      adminPattern = new RegExp(CONFIG.adminMatches),
+                      added = 0;
+
+                    for (var m = 0; m < wanted.length; m++) {
+                      if (findByKey(mappings, 'name', wanted[m])) {
+                        continue;
+                      }
+
+                      // A group left over by the per-run limit has no id to map yet, and its
+                      // mapping must not be reported as done; it is added by the run that
+                      // creates the group. In a dry run nothing was created at all, so the
+                      // list this run would have created stands in for the lookup.
+                      var group = findByKey(userGroups, 'name', wanted[m]);
+                      if (!group && result.created_groups.indexOf(wanted[m]) === -1) {
+                        continue;
+                      }
+
+                      var role = adminPattern.test(wanted[m]) ? CONFIG.roleAdmin : CONFIG.roleDefault;
+                      result.created_mappings.push({name: wanted[m], role: role});
+
+                      if (!group) {
+                        // Dry run: the user group was not created, so there is no id to map.
+                        continue;
+                      }
+
+                      mappings.push({
+                        name: wanted[m],
+                        roleid: roleId(role),
+                        user_groups: [{usrgrpid: group.usrgrpid}]
+                      });
+                      added++;
+                    }
+
+                    if (added > 0 && !CONFIG.dryRun) {
+                      api('userdirectory.update', {
+                        userdirectoryid: directory.userdirectoryid,
+                        provision_groups: mappings
+                      });
+                    }
+
+                    // 4) Report the other direction: what exists in Zabbix but no longer in AD.
+                    result.orphan_groups = findOrphanGroups(userGroups, wanted);
+                    result.orphan_groups_count = result.orphan_groups.length;
+                  }
+                  catch (error) {
+                    // The error travels in the payload instead of making the item unsupported,
+                    // so the trigger below can report it with the failing message.
+                    result.error = String(error);
+                    Zabbix.log(3, '[ AD Group Sync ] FAILED: ' + result.error);
+                  }
+
+                  // Plain counters for the dependent items, filled on the error path as well.
+                  result.created_groups_count = result.created_groups.length;
+                  result.created_mappings_count = result.created_mappings.length;
+                  result.duration = Date.now() - started;
+                  return JSON.stringify(result);
+          master_item:
+            key: 'wmi.getall["{$AD.SYNC.LDAP.NAMESPACE}","select DS_name from DS_Group where ADSIPath like ''{$AD.SYNC.LDAP.ADSIPATH}''"]'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: c54b92f93a86464da65c5e2f5b362b3f
+          name: 'Sync: Created user groups'
+          type: DEPENDENT
+          key: ad.groups.sync.created
+          delay: '0'
+          description: 'Number of Zabbix user groups created during the last run.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.created_groups_count
+          master_item:
+            key: ad.groups.sync
+          tags:
+            - tag: component
+              value: application
+        - uuid: 3e6791af731a4a9dafa1ce252ba39358
+          name: 'Sync: Created mappings'
+          type: DEPENDENT
+          key: ad.groups.sync.mappings
+          delay: '0'
+          description: 'Number of provisioning mappings added to the user directory during the last run.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.created_mappings_count
+          master_item:
+            key: ad.groups.sync
+          tags:
+            - tag: component
+              value: application
+        - uuid: 6cb654545ad540289f87fae4ee3f6b9e
+          name: 'Sync: Zabbix groups not in AD'
+          type: DEPENDENT
+          key: ad.groups.sync.orphans
+          delay: '0'
+          description: |
+            Number of Zabbix user groups that have no counterpart in AD any more, ignoring the
+            names matched by {$AD.SYNC.USERGROUP.IGNORE}. The names themselves are in the JSON of
+            the "Synchronize AD groups" item (orphan_groups). Nothing is deleted automatically.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.orphan_groups_count
+          master_item:
+            key: ad.groups.sync
+          tags:
+            - tag: component
+              value: application
+          triggers:
+            - uuid: aa5dc6ef38a94ae5892859ff53697b6b
+              expression: 'last(/AD Group Sync by Zabbix agent/ad.groups.sync.orphans)>{$AD.SYNC.ORPHANS.MAX.WARN}'
+              name: 'AD Group Sync: User groups without an AD counterpart'
+              event_name: 'AD Group Sync: User groups without an AD counterpart ({ITEM.VALUE} groups)'
+              priority: WARNING
+              description: |
+                Zabbix has user groups that no longer exist in the monitored AD container and are
+                not excluded by the ignore pattern. The names are in the orphan_groups field of the
+                "Synchronize AD groups" item. Nothing is deleted automatically: remove the groups by
+                hand, or add them to the ignore pattern when they are maintained outside AD.
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 5b05e4d53e574b368e17820c34a7a7ce
+          name: 'Sync: Groups waiting to be created'
+          type: DEPENDENT
+          key: ad.groups.sync.pending
+          delay: '0'
+          description: |
+            Number of AD groups that still have no Zabbix user group after the last run because the
+            per-run create limit was reached. They are created by the following runs; the value
+            returns to 0 once the estate has converged.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.pending_groups
+          master_item:
+            key: ad.groups.sync
+          tags:
+            - tag: component
+              value: application
+        - uuid: 2c77058a360f41f58b14aa944d1a9424
+          name: 'Sync: Duration'
+          type: DEPENDENT
+          key: ad.groups.sync.duration
+          delay: '0'
+          units: ms
+          description: |
+            Run time of the synchronization script, including the Zabbix API calls. The script is a
+            JavaScript preprocessing step, which Zabbix aborts after 10 seconds; this value shows how
+            close a run gets to that limit.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.duration
+          master_item:
+            key: ad.groups.sync
+          tags:
+            - tag: component
+              value: application
+          triggers:
+            - uuid: ff01eb73c2434f21a85e26389c73ee22
+              expression: 'min(/AD Group Sync by Zabbix agent/ad.groups.sync.duration,#3)>{$AD.SYNC.DURATION.MAX.WARN}'
+              name: 'AD Group Sync: Synchronization run time is too high'
+              event_name: 'AD Group Sync: Synchronization run time is too high (over {$AD.SYNC.DURATION.MAX.WARN} ms in the last 3 runs)'
+              priority: WARNING
+              description: |
+                The script is getting close to the 10-second limit Zabbix gives a JavaScript
+                preprocessing step; beyond it the item turns unsupported and the synchronization
+                stops. It fires only when all of the last three runs were slow, so a single slow
+                run is ignored. Lower the create limit macro (AD.SYNC.CREATE.LIMIT) so fewer groups
+                are created per run, or check why the Zabbix API answers slowly.
+                Acknowledge to close the problem manually.
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: performance
+            - uuid: dba131ffc93d4230aa921cd90de2a709
+              expression: 'nodata(/AD Group Sync by Zabbix agent/ad.groups.sync.duration,{$AD.SYNC.NODATA})=1'
+              name: 'AD Group Sync: Synchronization has not run'
+              event_name: 'AD Group Sync: Synchronization has not run (no result for {$AD.SYNC.NODATA})'
+              priority: AVERAGE
+              description: |
+                The synchronization delivered no result for {$AD.SYNC.NODATA} although the AD group
+                list still arrives. The usual cause is the script exceeding the 10-second limit of a
+                JavaScript preprocessing step, which turns the "Synchronize AD groups" item
+                unsupported and stops every dependent item with it; check that item's state and
+                lower the create limit macro (AD.SYNC.CREATE.LIMIT). Nothing is synchronized until
+                the item recovers.
+              dependencies:
+                - name: 'AD Group Sync: Failed to fetch AD group data'
+                  expression: 'nodata(/AD Group Sync by Zabbix agent/wmi.getall["{$AD.SYNC.LDAP.NAMESPACE}","select DS_name from DS_Group where ADSIPath like ''{$AD.SYNC.LDAP.ADSIPATH}''"],{$AD.SYNC.NODATA})=1'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: ca39c3e662e942a4984dd50ce0d90d80
+          name: 'Sync: Last error'
+          type: DEPENDENT
+          key: ad.groups.sync.error
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          description: 'Error message of the last run, empty when the synchronization succeeded.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.error
+          master_item:
+            key: ad.groups.sync
+          tags:
+            - tag: component
+              value: application
+          triggers:
+            - uuid: 53bcf3cbabf74bf3bc23333733020031
+              expression: 'length(last(/AD Group Sync by Zabbix agent/ad.groups.sync.error))>0'
+              name: 'AD Group Sync: Synchronization failed'
+              event_name: 'AD Group Sync: Synchronization failed ({ITEM.VALUE})'
+              priority: AVERAGE
+              description: |
+                The script could not finish; the message names the failing step. Typical causes: a
+                wrong or expired API token (macro AD.SYNC.API.TOKEN), a token without Super admin
+                rights, an unreachable API endpoint {$AD.SYNC.API.URL}, a user directory that is
+                missing or has JIT provisioning disabled, or a role name in the role macros that
+                does not exist.
+              dependencies:
+                - name: 'AD Group Sync: Failed to fetch AD group data'
+                  expression: 'nodata(/AD Group Sync by Zabbix agent/wmi.getall["{$AD.SYNC.LDAP.NAMESPACE}","select DS_name from DS_Group where ADSIPath like ''{$AD.SYNC.LDAP.ADSIPATH}''"],{$AD.SYNC.NODATA})=1'
+              tags:
+                - tag: scope
+                  value: availability
+      tags:
+        - tag: class
+          value: application
+        - tag: target
+          value: active-directory
+      macros:
+        - macro: '{$AD.SYNC.API.TOKEN}'
+          type: SECRET_TEXT
+          description: |
+            Zabbix API token used to create user groups and update the user directory. Needs a
+            Super admin role. Create it in Users - API tokens for a dedicated user and give it an
+            expiry: the script sends it to whatever {$AD.SYNC.API.URL} points at, so whoever may
+            edit that macro on the host can also receive the token.
+        - macro: '{$AD.SYNC.API.URL}'
+          value: 'http://localhost/api_jsonrpc.php'
+          description: 'Zabbix API endpoint the script calls, for example https://zabbix.example.com/api_jsonrpc.php.'
+        - macro: '{$AD.SYNC.CREATE.LIMIT}'
+          value: '20'
+          description: |
+            Maximum number of Zabbix user groups created in one run. The synchronization runs as a
+            JavaScript preprocessing step, which Zabbix stops after 10 seconds, and every created
+            group costs one API call; the limit keeps a first run over a large container inside
+            that budget. What is left over is created by the following runs, so the estate
+            converges after a few intervals. Set to 0 to create everything in a single run.
+        - macro: '{$AD.SYNC.DEBUG}'
+          value: '0'
+          description: 'Set to 1 to log every API request into the Zabbix server log (level 4, debug).'
+        - macro: '{$AD.SYNC.DRY_RUN}'
+          value: '0'
+          description: |
+            Set to 1 to only report what would be created, without writing anything to Zabbix.
+            Recommended for the first run on a new estate.
+        - macro: '{$AD.SYNC.DURATION.MAX.WARN}'
+          value: '8000'
+          description: |
+            Run time of the synchronization in milliseconds above which the trigger reports that
+            the script is approaching the 10-second limit of a JavaScript preprocessing step.
+        - macro: '{$AD.SYNC.INTERVAL}'
+          value: 1h
+          description: 'How often the AD group list is read and the synchronization runs.'
+        - macro: '{$AD.SYNC.LDAP.ADSIPATH}'
+          value: '%OU=ZABBIX_Groups,DC=example,DC=com%'
+          description: |
+            ADSI path filter of the container holding the groups to synchronize, used in the WMI
+            query as "ADSIPath like ''<value>''". Keep the leading and trailing % wildcards,
+            for example %OU=MON,OU=Groups,OU=Tier_2,DC=infra,DC=example,DC=cz%.
+        - macro: '{$AD.SYNC.LDAP.NAMESPACE}'
+          value: 'root\directory\ldap'
+          description: 'WMI namespace that exposes the directory classes. Only change it in a non-standard environment.'
+        - macro: '{$AD.SYNC.NODATA}'
+          value: 2h
+          description: 'For how long the AD group list or the synchronization result may be missing before the no-data triggers fire.'
+        - macro: '{$AD.SYNC.ORPHANS.MAX.WARN}'
+          value: '0'
+          description: |
+            Number of Zabbix user groups without an AD counterpart that is tolerated before the
+            warning fires. 0 reports every such group.
+        - macro: '{$AD.SYNC.ROLE.ADMIN}'
+          value: 'Super admin role'
+          description: 'Name of the role assigned to groups matching {$AD.SYNC.ROLE.ADMIN.MATCHES}.'
+        - macro: '{$AD.SYNC.ROLE.ADMIN.MATCHES}'
+          value: Admin
+          description: |
+            Regular expression selecting the groups that get {$AD.SYNC.ROLE.ADMIN}; every other
+            group gets {$AD.SYNC.ROLE.DEFAULT}. It is matched against the Zabbix user group name,
+            prefix included. The value is inserted into the script as is: write a backslash twice
+            (\\d for \d) and do not use an apostrophe.
+        - macro: '{$AD.SYNC.ROLE.DEFAULT}'
+          value: 'User role'
+          description: 'Name of the role assigned to every other synchronized group.'
+        - macro: '{$AD.SYNC.TIMEOUT}'
+          value: 10s
+          description: |
+            Timeout of the WMI query against the directory. Set on the item on purpose: a query
+            over a large container exceeds the 3 seconds an agent allows by default. It takes
+            effect with Zabbix agent 7.0 or newer; older agents keep their own Timeout setting.
+        - macro: '{$AD.SYNC.USERDIRECTORY}'
+          description: |
+            Name of the user directory whose provisioning groups are maintained. Leave empty to
+            use the first user directory configured in Zabbix.
+        - macro: '{$AD.SYNC.USERGROUP.IGNORE}'
+          value: '^(Zabbix administrators|Guests|Disabled|Internal|No access to the frontend|Enabled debug mode)$'
+          description: |
+            Regular expression of Zabbix user group names that are never reported as missing in
+            AD. The default covers the built-in Zabbix groups; extend it with any group you
+            maintain by hand, for example ^(Zabbix administrators|Guests|Disabled|Internal|No
+            access to the frontend|Enabled debug mode|Local admins)$. An empty value reports
+            every group. The value is inserted into the script as is: write a backslash twice
+            (\\d for \d) and do not use an apostrophe.
+        - macro: '{$AD.SYNC.USERGROUP.PREFIX}'
+          description: |
+            Optional prefix for the created Zabbix user group names, for example "AD - ".
+            Empty means the user group is named exactly like the AD group.

@@ -1,0 +1,465 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: Templates/Applications
+  templates:
+    - uuid: 1006105368c34379a10ee88143c5d29b
+      template: 'FreeIPA Server'
+      name: 'FreeIPA Server'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-0
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: 40e58749420d4aeeb3488b51f3bc201b
+          name: 'IPA RAW JSON'
+          key: ipa.raw
+          delay: 10m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          timeout: 30s
+          tags:
+            - tag: FreeIPA
+            - tag: component
+              value: raw
+            - tag: FreeIPA
+              value: raw
+        - uuid: 58ce2b7f0def4d689a90dbcb7d495ad4
+          name: 'IPA meta: FQDN'
+          type: DEPENDENT
+          key: ipa.meta.fqdn
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'Server FQDN reported by ipahealthcheck.meta.core.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return '';
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.meta.core' && d.check === 'MetaCheck') {
+                          var kw = d.kw || {};
+                          return kw.fqdn || '';
+                      }
+                  }
+                  return '';
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: meta
+        - uuid: 1ee4af57169142429f7da5d841a31ed0
+          name: 'IPA meta: IPA version'
+          type: DEPENDENT
+          key: ipa.meta.ipa_version
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'FreeIPA version reported by ipahealthcheck.meta.core.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return '';
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.meta.core' && d.check === 'MetaCheck') {
+                          var kw = d.kw || {};
+                          return kw.ipa_version || '';
+                      }
+                  }
+                  return '';
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: meta
+        - uuid: 8196c9ca72ac453a8dc707647b0a5895
+          name: 'IPA meta: IPA API version'
+          type: DEPENDENT
+          key: ipa.meta.ipa_api_version
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'FreeIPA API version reported by ipahealthcheck.meta.core.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return '';
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.meta.core' && d.check === 'MetaCheck') {
+                          var kw = d.kw || {};
+                          return kw.ipa_api_version || '';
+                      }
+                  }
+                  return '';
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: meta
+        - uuid: fe5b6d4ce6c84c8fbd897734ee8b11f1
+          name: 'IPA meta: FIPS mode'
+          type: DEPENDENT
+          key: ipa.meta.fips
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'FIPS mode status reported by ipahealthcheck.meta.core (enabled or disabled).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return '';
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.meta.core' && d.check === 'MetaCheck') {
+                          var kw = d.kw || {};
+                          return kw.fips || '';
+                      }
+                  }
+                  return '';
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: meta
+        - uuid: d8786909628944e1aa037db9f3d10e7c
+          name: 'IPA meta: ACME'
+          type: DEPENDENT
+          key: ipa.meta.acme
+          delay: '0'
+          value_type: CHAR
+          trends: '0'
+          description: 'ACME integration status reported by ipahealthcheck.meta.core (enabled or disabled).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return '';
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.meta.core' && d.check === 'MetaCheck') {
+                          var kw = d.kw || {};
+                          return kw.acme || '';
+                      }
+                  }
+                  return '';
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: meta
+        - uuid: 6b4da5a42e06473a9438487a19b1bb5a
+          name: 'IPA meta: masters'
+          type: DEPENDENT
+          key: ipa.meta.masters
+          delay: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'List of IPA masters reported by ipahealthcheck.ipa.meta.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return '';
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.ipa.meta' && d.check === 'IPAMetaCheck') {
+                          var kw = d.kw || {};
+                          if (!kw.masters) return '';
+                          return kw.masters.join('\n');
+                      }
+                  }
+                  return '';
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: meta
+        - uuid: 9257d7ea4ce4450ca53b189bc62a56da
+          name: 'IPA DNA: range start'
+          type: DEPENDENT
+          key: ipa.dna.range_start
+          delay: '0'
+          value_type: FLOAT
+          description: 'Start of the current DNA (Distributed Numeric Assignment) range used for distributed ID allocation.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return 0;
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.ipa.dna' && d.check === 'IPADNARangeCheck') {
+                          var kw = d.kw || {};
+                          var n = parseFloat(kw.range_start);
+                          return isNaN(n) ? 0 : n;
+                      }
+                  }
+                  return 0;
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: dna
+        - uuid: 5f4725d0b0224c208939d01a8cf8376a
+          name: 'IPA DNA: range max'
+          type: DEPENDENT
+          key: ipa.dna.range_max
+          delay: '0'
+          value_type: FLOAT
+          description: 'End of the current DNA (Distributed Numeric Assignment) range used for distributed ID allocation.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return 0;
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.ipa.dna' && d.check === 'IPADNARangeCheck') {
+                          var kw = d.kw || {};
+                          var n = parseFloat(kw.range_max);
+                          return isNaN(n) ? 0 : n;
+                      }
+                  }
+                  return 0;
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: dna
+        - uuid: bdca9f785c2e46f4809ec959955b724b
+          name: 'IPA DNA: next start'
+          type: DEPENDENT
+          key: ipa.dna.next_start
+          delay: '0'
+          value_type: FLOAT
+          description: 'Start of the next DNA (Distributed Numeric Assignment) range reserved for rollover (0 when not assigned).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return 0;
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.ipa.dna' && d.check === 'IPADNARangeCheck') {
+                          var kw = d.kw || {};
+                          var n = parseFloat(kw.next_start);
+                          return isNaN(n) ? 0 : n;
+                      }
+                  }
+                  return 0;
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: dna
+        - uuid: 74109d6c9f2c41368e52adfbcfccf9fc
+          name: 'IPA DNA: next max'
+          type: DEPENDENT
+          key: ipa.dna.next_max
+          delay: '0'
+          value_type: FLOAT
+          description: 'End of the next DNA (Distributed Numeric Assignment) range reserved for rollover (0 when not assigned).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) return 0;
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      if (d.source === 'ipahealthcheck.ipa.dna' && d.check === 'IPADNARangeCheck') {
+                          var kw = d.kw || {};
+                          var n = parseFloat(kw.next_max);
+                          return isNaN(n) ? 0 : n;
+                      }
+                  }
+                  return 0;
+          master_item:
+            key: ipa.raw
+          tags:
+            - tag: FreeIPA
+            - tag: FreeIPA
+              value: dna
+      discovery_rules:
+        - uuid: 502eaabeeda548c3a74f7d98d2dd8759
+          name: 'IPA healthcheck checks discovery'
+          type: DEPENDENT
+          key: ipa.healthcheck.checks.discovery
+          delay: '0'
+          description: 'Discover ipa-healthcheck checks (source + check + identifier).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function entryId(d) {
+                      var kw = d.kw || {};
+                      return kw.key || kw.store || kw.path || kw.service || kw.cn || kw.name || kw.id || kw.rid || kw.hostname || kw.issuer || kw.subject || kw.serial || kw.dn || kw.realm || kw.suffix || kw.profile || kw.server || kw.ipaddr || kw.ip_address || '';
+                  }
+                  function details(entry) {
+                      if (!entry || !Object.keys(entry).length) return '';
+                      try { return JSON.stringify(entry, null, 2); } catch (e) { return ''; }
+                  }
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { data = []; }
+                  if (!Array.isArray(data)) data = [];
+                  var seen = {};
+                  var out = { data: [] };
+                  for (var i = 0; i < data.length; i++) {
+                      var d = data[i];
+                      var src = d.source || '';
+                      var check = d.check || '';
+                      if (!src || !check) continue;
+                      var id = entryId(d);
+                      var key = src + '|' + check + '|' + id;
+                      if (seen[key]) continue;
+                      seen[key] = true;
+                      var short = src;
+                      if (short.indexOf('ipahealthcheck.') === 0) {
+                          short = short.substring('ipahealthcheck.'.length);
+                      }
+                      var idLabel = id ? ' - ' + id : '';
+                      out.data.push({
+                          "{#SOURCE}": src,
+                          "{#SOURCE_SHORT}": short,
+                          "{#CHECK}": check,
+                          "{#ID}": id,
+                          "{#ID_LABEL}": idLabel,
+                          "{#DETAILS}": details(d)
+                      });
+                  }
+                  return JSON.stringify(out);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: ipa.raw
+          item_prototypes:
+            - uuid: a11be818e27e4f628e06040ee1cd10ae
+              name: 'IPA {#SOURCE_SHORT}: {#CHECK}{#ID_LABEL}'
+              type: DEPENDENT
+              key: 'ipa.healthcheck.result["{#SOURCE}","{#CHECK}","{#ID}"]'
+              delay: '0'
+              value_type: CHAR
+              trends: '0'
+              description: |
+                Source: {#SOURCE}
+                Check: {#CHECK}
+                Details (entry):
+                {#DETAILS}
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      function entryId(d) {
+                          var kw = d.kw || {};
+                          return kw.key || kw.store || kw.path || kw.service || kw.cn || kw.name || kw.id || kw.rid || kw.hostname || kw.issuer || kw.subject || kw.serial || kw.dn || kw.realm || kw.suffix || kw.profile || kw.server || kw.ipaddr || kw.ip_address || '';
+                      }
+                      var data;
+                      try { data = JSON.parse(value); } catch (e) { data = []; }
+                      if (!Array.isArray(data)) return '';
+                      var src = '{#SOURCE}';
+                      var check = '{#CHECK}';
+                      var id = '{#ID}';
+                      var seen = false;
+                      var status = 'SUCCESS';
+                      for (var i = 0; i < data.length; i++) {
+                          var d = data[i];
+                          if (d.source !== src || d.check !== check) continue;
+                          if (entryId(d) !== id) continue;
+                          seen = true;
+                          if (d.result && d.result !== 'SUCCESS') return d.result;
+                          if (!d.result) status = '';
+                      }
+                      return seen ? status : '';
+              master_item:
+                key: ipa.raw
+              tags:
+                - tag: FreeIPA
+                - tag: FreeIPA
+                  value: '{#SOURCE_SHORT}'
+              trigger_prototypes:
+                - uuid: 0f7bb95e0324446e9d5c9865580fee80
+                  expression: 'last(/FreeIPA Server/ipa.healthcheck.result["{#SOURCE}","{#CHECK}","{#ID}"])="WARNING"'
+                  name: 'FreeIPA Server {#SOURCE_SHORT}: {#CHECK}{#ID_LABEL} is WARNING'
+                  priority: WARNING
+                  description: |
+                    Source: {#SOURCE}
+                    Check: {#CHECK}
+                    Details (entry):
+                    {#DETAILS}
+                    Note: Derived from LLD data and may be stale until discovery refreshes.
+                  tags:
+                    - tag: FreeIPA
+                    - tag: FreeIPA
+                      value: '{#SOURCE_SHORT}'
+                - uuid: 8e9163d1fa7a4edca3d970d6dcaa83d6
+                  expression: 'last(/FreeIPA Server/ipa.healthcheck.result["{#SOURCE}","{#CHECK}","{#ID}"])="ERROR"'
+                  name: 'FreeIPA Server {#SOURCE_SHORT}: {#CHECK}{#ID_LABEL} is ERROR'
+                  priority: HIGH
+                  description: |
+                    Source: {#SOURCE}
+                    Check: {#CHECK}
+                    Details (entry):
+                    {#DETAILS}
+                    Note: Derived from LLD data and may be stale until discovery refreshes.
+                  tags:
+                    - tag: FreeIPA
+                    - tag: FreeIPA
+                      value: '{#SOURCE_SHORT}'
+                - uuid: 8e4dbb8c28c048b08459835950c3d3dc
+                  expression: 'last(/FreeIPA Server/ipa.healthcheck.result["{#SOURCE}","{#CHECK}","{#ID}"])="CRITICAL"'
+                  name: 'FreeIPA Server {#SOURCE_SHORT}: {#CHECK}{#ID_LABEL} is CRITICAL'
+                  priority: DISASTER
+                  description: |
+                    Source: {#SOURCE}
+                    Check: {#CHECK}
+                    Details (entry):
+                    {#DETAILS}
+                    Note: Derived from LLD data and may be stale until discovery refreshes.
+                  tags:
+                    - tag: FreeIPA
+                    - tag: FreeIPA
+                      value: '{#SOURCE_SHORT}'

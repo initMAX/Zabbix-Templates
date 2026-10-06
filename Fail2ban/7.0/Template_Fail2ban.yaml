@@ -1,0 +1,378 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 48d19098672f4e7aa7dab1942260d87d
+      template: Fail2ban
+      name: Fail2ban
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-2
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: de416c540fd0435db1822e38c036f0d7
+          name: 'Fail2Ban service status'
+          key: 'proc.num[,,,fail2ban]'
+          history: 7d
+          trends: 90d
+          valuemap:
+            name: 'Service state'
+          preprocessing:
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '1'
+          tags:
+            - tag: Application
+              value: Fail2ban
+            - tag: RAW
+          triggers:
+            - uuid: ffa07343b51d4bf58c2b8c324c6a7a62
+              expression: 'max(/Fail2ban/proc.num[,,,fail2ban],#3)=0'
+              name: 'Fail2ban server is not running!'
+              priority: HIGH
+              tags:
+                - tag: App
+                  value: Fail2ban
+      discovery_rules:
+        - uuid: ccbd8ba7a96d47b8953af017e3b0f803
+          name: 'Fail2ban discovery'
+          key: fail2ban.discovery
+          delay: 1h
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#JAIL}'
+                value: '{$FAIL2BAN.MATCHES}'
+                formulaid: A
+              - macro: '{#JAIL}'
+                value: '{$FAIL2BAN.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+          description: 'Discovery of jails from fail2ban daemon.'
+          item_prototypes:
+            - uuid: c41c40dbecaf439b832feae65e1de986
+              name: 'Fail2ban {#JAIL}: banned IPs (count)'
+              type: DEPENDENT
+              key: 'fail2ban.actions.curr_banned[{#JAIL}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'Currently banned:\s+(\d+)'
+                    - \1
+              master_item:
+                key: 'fail2ban.status[{#JAIL}]'
+              tags:
+                - tag: Application
+                  value: Fail2ban
+                - tag: Service
+                  value: '{#JAIL}'
+              trigger_prototypes:
+                - uuid: d7b4030030944ef6bed26b6a2c59269e
+                  expression: 'last(/Fail2ban/fail2ban.actions.curr_banned[{#JAIL}])>{$CURRENTLY.BANNED.IPS.WARN}'
+                  name: 'Fail2ban {#JAIL}: currently banned IPs exceeds {$CURRENTLY.BANNED.IPS.WARN}'
+                  event_name: 'Fail2ban {#JAIL}: banned IPs exceed {$CURRENTLY.BANNED.IPS.WARN} (now {ITEM.LASTVALUE})'
+                  priority: WARNING
+                - uuid: a8ca6b87d20f433a9a13be03400d4842
+                  expression: 'last(/Fail2ban/fail2ban.actions.curr_banned[{#JAIL}])>{$CURRENTLY.BANNED.IPS.EXCEEDS}'
+                  name: 'Fail2ban {#JAIL}: currently banned IPs exceeds {$CURRENTLY.BANNED.IPS.EXCEEDS}'
+                  event_name: 'Fail2ban {#JAIL}: banned IPs exceed {$CURRENTLY.BANNED.IPS.EXCEEDS} (now {ITEM.LASTVALUE})'
+                  priority: HIGH
+            - uuid: f375fb538b11437aa2d916e07b86f94a
+              name: 'Fail2ban {#JAIL}: banned IPs (list)'
+              type: DEPENDENT
+              key: 'fail2ban.actions.ip_list[{#JAIL}]'
+              delay: '0'
+              history: 1d
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      // Extract the full “Banned IP list:” line
+                      var m = value.match(/Banned IP list:\s*(.*)$/);
+                      if (!m || !m[1]) {
+                          return '';               // no IPs → return empty string
+                      }
+                      
+                      // Split on whitespace, zahodí prázdné položky, seřadí a spojí do řádků
+                      var ips = m[1].trim().split(/\s+/)
+                                     .filter(String)     // odstraní případné prázdné prvky
+                                     .sort();            // stabilní pořadí (lexikograficky)
+                      
+                      return ips.join('\n');
+              master_item:
+                key: 'fail2ban.status[{#JAIL}]'
+              tags:
+                - tag: Application
+                  value: Fail2ban
+                - tag: Service
+                  value: '{#JAIL}'
+            - uuid: 890b7cc843a94615ba7e21107923af9c
+              name: 'Fail2ban {#JAIL}: IPs ever banned (total)'
+              type: DEPENDENT
+              key: 'fail2ban.actions.total_banned[{#JAIL}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'Total banned:\s+(\d+)'
+                    - \1
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'fail2ban.status[{#JAIL}]'
+              tags:
+                - tag: Application
+                  value: Fail2ban
+                - tag: Service
+                  value: '{#JAIL}'
+            - uuid: e5f59a2c2b1e429e80be8bfbc13a8cb7
+              name: 'Fail2ban {#JAIL}: log‑in attempts currently failed'
+              type: DEPENDENT
+              key: 'fail2ban.filter.curr_failed[{#JAIL}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'Currently failed:\s+(\d+)'
+                    - \1
+              master_item:
+                key: 'fail2ban.status[{#JAIL}]'
+              tags:
+                - tag: Application
+                  value: Fail2ban
+                - tag: Service
+                  value: '{#JAIL}'
+            - uuid: 13b36800a7af498283082166ab5e4335
+              name: 'Fail2ban {#JAIL}: failed log‑ins (total)'
+              type: DEPENDENT
+              key: 'fail2ban.filter.total_failed[{#JAIL}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'Total failed:\s+(\d+)'
+                    - \1
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'fail2ban.status[{#JAIL}]'
+              tags:
+                - tag: Application
+                  value: Fail2ban
+                - tag: Service
+                  value: '{#JAIL}'
+              trigger_prototypes:
+                - uuid: 2f1a2a2378de4e74bb5432d1ab476497
+                  expression: |
+                    last(/Fail2ban/fail2ban.filter.total_failed[{#JAIL}]) -
+                    first(/Fail2ban/fail2ban.filter.total_failed[{#JAIL}],{$SPIKE.IN.FAILED.LOGINS_TIME}) > {$SPIKE.IN.FAILED.LOGINS}
+                  name: 'Fail2ban {#JAIL}: spike in failed logins (> {$SPIKE.IN.FAILED.LOGINS})'
+                  priority: HIGH
+            - uuid: 8cc0b05211fc4278b2feb46727a4ca97
+              name: 'Fail2ban {#JAIL} status'
+              key: 'fail2ban.status[{#JAIL}]'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              tags:
+                - tag: Application
+                  value: Fail2ban
+                - tag: RAW
+                - tag: Service
+                  value: '{#JAIL}'
+          graph_prototypes:
+            - uuid: b151e34af81548b1b92cf0a6b36cdee7
+              name: 'Count of banned IPs on jail {#JAIL}'
+              ymin_type_1: FIXED
+              graph_items:
+                - color: FF0000
+                  item:
+                    host: Fail2ban
+                    key: 'fail2ban.actions.curr_banned[{#JAIL}]'
+                - sortorder: '1'
+                  color: FFBF00
+                  calc_fnc: ALL
+                  item:
+                    host: Fail2ban
+                    key: 'fail2ban.filter.curr_failed[{#JAIL}]'
+      macros:
+        - macro: '{$CURRENTLY.BANNED.IPS.WARN}'
+          value: '5'
+          description: 'Warning threshold: trigger when current banned IPs exceed this number. Override per jail with context, e.g. {$CURRENTLY.BANNED.IPS.WARN:nginx-botsearch}'
+        - macro: '{$CURRENTLY.BANNED.IPS.EXCEEDS}'
+          value: '100'
+          description: 'High threshold: trigger when current banned IPs exceed this number. Override per jail with context, e.g. {$CURRENTLY.BANNED.IPS.EXCEEDS:nginx-botsearch}'
+        - macro: '{$FAIL2BAN.MATCHES}'
+          value: '.*'
+          description: 'Regex: jails to include in discovery (default = all)'
+        - macro: '{$FAIL2BAN.NOT_MATCHES}'
+          value: TEST|TEST2
+          description: 'Regex: jails to exclude from discovery'
+        - macro: '{$SPIKE.IN.FAILED.LOGINS}'
+          value: '10'
+          description: 'Threshold: number of new failed logins within {$SPIKE.IN.FAILED.LOGINS_TIME}'
+        - macro: '{$SPIKE.IN.FAILED.LOGINS_TIME}'
+          value: 5m
+          description: 'Time window used in spike trigger (e.g. 5m, 10m)'
+      dashboards:
+        - uuid: 9697ba1d96b140d2b0f341eb7e62f7ce
+          name: Fail2ban
+          pages:
+            - widgets:
+                - type: item
+                  name: 'Fail2ban service'
+                  width: '14'
+                  fields:
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: Fail2ban
+                        key: 'proc.num[,,,fail2ban]'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: FF0000
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: 43A047
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '1'
+                - type: itemnavigator
+                  name: 'Jail navigator'
+                  'y': '2'
+                  width: '14'
+                  height: '6'
+                  fields:
+                    - type: INTEGER
+                      name: group_by.0.attribute
+                      value: '3'
+                    - type: STRING
+                      name: group_by.0.tag_name
+                      value: Service
+                    - type: INTEGER
+                      name: item_tags.0.operator
+                      value: '1'
+                    - type: STRING
+                      name: item_tags.0.tag
+                      value: Application
+                    - type: STRING
+                      name: item_tags.0.value
+                      value: Fail2ban
+                    - type: INTEGER
+                      name: item_tags.1.operator
+                      value: '5'
+                    - type: STRING
+                      name: item_tags.1.tag
+                      value: RAW
+                    - type: STRING
+                      name: item_tags.1.value
+                      value: ''
+                    - type: STRING
+                      name: reference
+                      value: FLIDJ
+                - type: svggraph
+                  x: '14'
+                  width: '58'
+                  height: '6'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color.0
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.0.dataset_type
+                      value: '0'
+                    - type: STRING
+                      name: ds.0.itemids.0._reference
+                      value: FLIDJ._itemid
+                    - type: INTEGER
+                      name: ds.0.missingdatafunc
+                      value: '3'
+                    - type: STRING
+                      name: lefty_min
+                      value: '0'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: FTXDT
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: item
+                  x: '14'
+                  'y': '6'
+                  width: '30'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: itemid._reference
+                      value: FLIDJ._itemid
+                    - type: INTEGER
+                      name: show.0
+                      value: '2'
+                - type: honeycomb
+                  name: 'Blocked IPs'
+                  x: '44'
+                  'y': '6'
+                  width: '28'
+                  fields:
+                    - type: STRING
+                      name: items.0
+                      value: '*banned IPs (count)'
+                    - type: STRING
+                      name: primary_label
+                      value: '{{ITEM.NAME}.regsub("Fail2ban\s+(.*)\:\s+banned IPs \(count\)", \1)}'
+                    - type: STRING
+                      name: reference
+                      value: AOZHT
+                    - type: INTEGER
+                      name: secondary_label_decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.0.color
+                      value: 43A047
+                    - type: STRING
+                      name: thresholds.0.threshold
+                      value: '0'
+                    - type: STRING
+                      name: thresholds.1.color
+                      value: FFD54F
+                    - type: STRING
+                      name: thresholds.1.threshold
+                      value: '5'
+                    - type: STRING
+                      name: thresholds.2.color
+                      value: FF0000
+                    - type: STRING
+                      name: thresholds.2.threshold
+                      value: '10'
+      valuemaps:
+        - uuid: 249132609d114d21bf84a38a3c559bfd
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up

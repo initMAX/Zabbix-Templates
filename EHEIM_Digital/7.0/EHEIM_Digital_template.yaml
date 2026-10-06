@@ -1,0 +1,1771 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 3f4dd89d9afb438eaf67f639ec510e17
+      template: 'EHEIM Digital'
+      name: 'EHEIM Digital'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-1
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: e81206d556d244c2956427b37dfb76bf
+          name: 'Demo mode status'
+          type: DEPENDENT
+          key: eheim.demo.mode.status
+          delay: '0'
+          history: 7d
+          description: |
+            The demo use indicator indicates whether the device is configured for showroom purposes
+            Possible values: [0, 1]
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.demoUse
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: eheim.raw.userdata
+          tags:
+            - tag: EHEIM
+          triggers:
+            - uuid: 862b0ae8eb9a44e7810662252652b96f
+              expression: 'last(/EHEIM Digital/eheim.demo.mode.status)=1'
+              name: 'Demo mode is active!'
+              url_name: 'EHEIM Digital'
+              url: 'http://{$HOST.API}/'
+              priority: INFO
+        - uuid: ea5b6d0c85b146dc945e76469144c10f
+          name: 'Device discovery raw'
+          type: SCRIPT
+          key: eheim.device.discovery.raw
+          history: 1h
+          value_type: TEXT
+          trends: '0'
+          params: |
+            // Parse configuration from input.
+            var config = {};
+            try {
+                config   = (typeof params === 'object') ? params : JSON.parse(value);
+            } catch (e)   {
+                throw 'Missing or invalid configuration parameters';
+            }
+            
+            // Set   default values if not provided
+            var api_host = config.api_host || "http://192.168.1.1"  ;
+            var api_username = config.api_username || "api";
+            var api_password  =  config.api_password || "admin";
+            
+            // btoa function to encode a string   to Base64
+            function btoa(input) {
+                var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+                  var str = input;
+                var output = '';
+                for (var block = 0, charCode,   i = 0, map = chars;
+                     str.charAt(i | 0) || (map = '=', i % 1);
+                       output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
+                    charCode   = str.charCodeAt(i += 3/4);
+                    if (charCode > 0xFF) {
+                          throw new Error("'btoa' failed: The string contains characters outside   of the Latin1 range.");
+                    }
+                    block = block << 8 | charCode;
+                  }
+                return output;
+            }
+            
+            // Ensure api_host starts with "http"
+              if (!api_host.startsWith("http")) {
+                api_host = "http://" + api_host;
+              }
+            
+            // Create the Basic Auth header using the provided username and password
+              var authHeader = "Authorization: Basic " + btoa(api_username + ":" +  api_password);
+             
+            // Create HttpRequest instance and add the auth header
+             var request = new  HttpRequest();
+            request.addHeader(authHeader);
+            
+            // Fetch  the devicelist  from the API
+            var devicelistResp = request.get(api_host  + "/api/devicelist" );
+            
+            // Parse the devicelist JSON; expected fields:  clientList (MAC addresses)  and clientIPList
+            var deviceList = JSON.parse(devicelistResp);
+             var macs  = deviceList.clientList || [];
+            var ips = deviceList.clientIPList  || [];
+             
+            // Prepare the result array for LLD (Low-Level Discovery)
+            var  result =  [];
+            
+            // For each device (by MAC address), call the userdata  API to get  'tankconfig' and 'name'
+            for (var i = 0; i < macs.length; i++)  {
+                var  mac = macs[i];
+                var ip = (i < ips.length) ? ips[i] : "" ;
+                var  tankconfig = "UNKNOWN";
+                var devicename = "UNKNOWN";
+                 
+                 // Construct userdata URL with parameter 'to' set to the MAC address
+                  var userdataUrl = api_host + "/api/userdata?to=" + encodeURIComponent(mac);
+                  var userdataResp = "";
+                
+                try {
+                    userdataResp = request.get(userdataUrl);
+                  } catch (err) {
+                    userdataResp = null;
+                }
+                
+                if (userdataResp   !== null && userdataResp !== "") {
+                    try {
+                        var userdata   = JSON.parse(userdataResp);
+                        tankconfig = userdata.tankconfig   || "UNKNOWN";
+                        devicename = userdata.name || "UNKNOWN" ;
+                     } catch (e) {
+                        tankconfig = "ERROR";
+                         devicename  = "ERROR";
+                    }
+                } else {
+                    tankconfig  = "TIMEOUT" ;
+                    devicename = "TIMEOUT";
+                }
+                
+                //  Add the discovered  device to the result array with LLD macros
+                result.push({
+                     "{#DEVICE.MAC}": mac,
+                    "{#DEVICE.IP}": ip,
+                     "{#DEVICE.TYPE}" : tankconfig,
+                    "{#DEVICE.NAME}": devicename
+                 });
+            }
+            
+            // Return  the final LLD JSON as a string
+            return JSON.stringify(result);
+          description: 'Item for discovering EHEIM devices and types.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value);
+                  
+                  var filteredData = data.filter(function(item) {
+                      for (var key in item) {
+                          if (item[key] === "TIMEOUT") {
+                              return false; // exclude item
+                          }
+                      }
+                      return true; // keep item
+                  });
+                  
+                  return JSON.stringify(filteredData);
+          timeout: 60s
+          parameters:
+            - name: api_host
+              value: '{$API.HOST}'
+            - name: api_password
+              value: '{$API.PASS}'
+            - name: api_username
+              value: '{$API.USER}'
+          tags:
+            - tag: raw
+          triggers:
+            - uuid: 6e138fee7dcb4b6ab9502c1c777d1e7e
+              expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+              name: 'API not returning data (Device discovery raw)'
+              priority: AVERAGE
+              description: 'Raises when the master item "Device discovery raw" stops returning data.'
+        - uuid: ee53615098a149c4aee70ed2d92a4065
+          name: 'Firmware update'
+          type: DEPENDENT
+          key: eheim.firmware.available
+          delay: '0'
+          history: 7d
+          description: |
+            The firmware update availability flag indicates whether a newer version of the device's firmware is accessible for installation.
+            Possible values: [0, 1]
+          valuemap:
+            name: 'Firmware update'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.firmwareAvailable
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: eheim.raw.userdata
+          tags:
+            - tag: EHEIM
+          triggers:
+            - uuid: d79d6eda9ee84de3a92eaf755e62083b
+              expression: 'last(/EHEIM Digital/eheim.firmware.available)=1'
+              name: 'Firmware update available'
+              url_name: 'EHEIM Digital'
+              url: 'http://{$HOST.API}/'
+              priority: INFO
+        - uuid: 3dd76482e6db4d62a8a35b87df37c74d
+          name: 'User data'
+          type: HTTP_AGENT
+          key: eheim.raw.userdata
+          delay: 1h
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          authtype: BASIC
+          username: '{$API.USER}'
+          password: '{$API.PASS}'
+          description: |
+            This endpoint provides detailed information about the device, including:
+            
+            Device Name
+            Software version
+            Whether an update is available
+            Timezone
+          timeout: 10s
+          url: 'http://{$API.HOST}/api/userdata'
+          tags:
+            - tag: raw
+        - uuid: 08bb6ab5707745a58e23ce840ba9e0f1
+          name: 'Firmware on EHEIM web page'
+          type: HTTP_AGENT
+          key: eheim.web.firmware
+          delay: 1h
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'last-modified:\s+(.*)'
+                - \1
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 8h
+          url: 'https://eheim.com/media/d7/23/77/1736538276/EHEIM%20Digital%20Software.zip'
+          retrieve_mode: HEADERS
+          tags:
+            - tag: EHEIM
+          triggers:
+            - uuid: 54317f534f3f4dc3a8144ae4fc03bfff
+              expression: 'last(/EHEIM Digital/eheim.web.firmware,#1)<>last(/EHEIM Digital/eheim.web.firmware,#2)'
+              recovery_mode: NONE
+              name: 'Firmware is updated on EHEIM web page'
+              url_name: 'EHEIM Downloads web page'
+              url: 'https://eheim.com/en_GB/support/downloads/'
+              priority: INFO
+              manual_close: 'YES'
+      discovery_rules:
+        - uuid: 261cf175b8704d8ba7222b53ea3e188c
+          name: 'Discovery autofeeder+'
+          type: DEPENDENT
+          key: discovery.autofeeder
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: Feeder
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: e204bfda943e4e0f8deb4a23b29c7dd6
+              name: 'Feeder data from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.feeder.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/autofeeder'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: autofeeder+
+                - tag: raw
+              trigger_prototypes:
+                - uuid: 75ceb73652c140348ed254a27d6b74cd
+                  expression: 'nodata(/EHEIM Digital/eheim.feeder.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.feeder.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: 63494b0432374bdbb9823e2b3d98a247
+              name: 'Feeder fill {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'feeder.fill[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              units: '%'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.level.first()
+              master_item:
+                key: 'eheim.feeder.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: autofeeder+
+              trigger_prototypes:
+                - uuid: eda4de443a8148adb383d69461725b72
+                  expression: 'last(/EHEIM Digital/feeder.fill[{#DEVICE.MAC}])<{$MIN.FEEDER.FILL}'
+                  name: 'Minimum feeder fill'
+                  event_name: 'Minimum feeder fill reached: {$MIN.FEEDER.FILL}'
+                  opdata: 'Filled from: {ITEM.LASTVALUE}'
+                  priority: WARNING
+            - uuid: 5df82340f18646e2a8c5b28973780a11
+              name: 'Overfeeding {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'feeder.overfeeding[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Overfeeding status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.overfeeding
+              master_item:
+                key: 'eheim.feeder.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: autofeeder+
+              trigger_prototypes:
+                - uuid: aa446e64bd4743429f5aeb25c7fd6771
+                  expression: 'last(/EHEIM Digital/feeder.overfeeding[{#DEVICE.MAC}])=0'
+                  name: 'Overfeeding is not enabled!'
+                  priority: INFO
+            - uuid: fb1783b338764b5bb8ea24bd719cdc7e
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'feeder.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+              master_item:
+                key: 'eheim.feeder.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: autofeeder+
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: bf10e411d86041e39ced81133f620a16
+          name: 'Discovery climacontrol+'
+          type: DEPENDENT
+          key: discovery.climacontrol
+          delay: '0'
+          status: DISABLED
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: CHILLER
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 'NOT TESTED!'
+          item_prototypes:
+            - uuid: a66eedbbfa6f4d998394b2def29b53d7
+              name: 'Alert state {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.alert.state[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Alert status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.alertState
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+              trigger_prototypes:
+                - uuid: c12e54d368ae48acb97b3544478b390e
+                  expression: 'last(/EHEIM Digital/climacontrol.alert.state[{#DEVICE.MAC}])<>0'
+                  name: 'Alert state detected on {#DEVICE.NAME}'
+                  opdata: 'Alert state: {ITEM.LASTAVALUE}'
+                  priority: HIGH
+            - uuid: 52b5cf05a73f4f99a40471d3af56bd16
+              name: 'Cooling state {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.cooling.state[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Cooling status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isCooling
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+            - uuid: 1d138931876242d5a4ba6839ff9474eb
+              name: 'Heating state {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.heating.state[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Heating status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isHeating
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+            - uuid: dfd363d66f2d42429f1e840526afaf13
+              name: 'Chiller Operation Mode {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.operation.mode[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data = JSON.parse(value);
+                      
+                      if (data.isHeating === 1) {
+                          return "heating";
+                      } else if (data.isCooling === 1) {
+                          return "cooling";
+                      } else {
+                          return "none";
+                      }
+                      
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+            - uuid: 3b74b66b83f1420fa5f8191a8f42d769
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+                - type: NOT_MATCHES_REGEX
+                  parameters:
+                    - ^$
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Not synchronised!'
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+            - uuid: 776a9b65828d4c6ca412f68ceea1f9d2
+              name: 'Target temperature {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.target.temperature[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: °C
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.sollTemp
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'return +(value / 10).toFixed(1);'
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+            - uuid: dc714bd8c94f4573861607273183f960
+              name: 'Temperature {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'climacontrol.temperature[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: °C
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isTemp
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'return +(value / 10).toFixed(1);'
+              master_item:
+                key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+              trigger_prototypes:
+                - uuid: 6d712b2b56204108a4d5af38f532a86d
+                  expression: 'avg(/EHEIM Digital/climacontrol.temperature[{#DEVICE.MAC}],{$TEMP.AVG.TIME})>{$MAX.TEMP}'
+                  name: 'Temperature is high on {#DEVICE.NAME}'
+                  event_name: 'Temperature is more then {$MAX.TEMP} on {#DEVICE.NAME}'
+                  opdata: 'Actual temperature is: {ITEM.LASTAVALUE}'
+                  priority: WARNING
+                - uuid: 876d2220d71e49d29553966af4d319cc
+                  expression: 'avg(/EHEIM Digital/climacontrol.temperature[{#DEVICE.MAC}],{$TEMP.AVG.TIME})<{$MIN.TEMP}'
+                  name: 'Temperature is too low on {#DEVICE.NAME}'
+                  event_name: 'Temperature is less then {$MIN.TEMP} on {#DEVICE.NAME}'
+                  opdata: 'Actual temperature is: {ITEM.LASTAVALUE}'
+                  priority: WARNING
+            - uuid: 18d28301436a4201b461a2802786e08c
+              name: 'Climacontrol data from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.climacontrol.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/climacontrol'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: climacontrol+
+                - tag: raw
+              trigger_prototypes:
+                - uuid: 75034716471546a4886c7960794476f0
+                  expression: 'nodata(/EHEIM Digital/eheim.climacontrol.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.thermocontrol.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: 3a721c5750fc4d968354bb680c8566d7
+          name: 'Discovery LEDcontrol series'
+          type: DEPENDENT
+          key: discovery.ledcontrol
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: '.*FRESH.*'
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: adc091caae90451d8f2c6c91ee97930c
+              name: 'LEDcontrol series data get from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.ledcontrol.series.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              description: 'Please check your correct setting for your colors: https://api.eheimdigital.com/docs/eheim_digital_api/light-current-values'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/light'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: 'LEDcontrol series'
+                - tag: raw
+              trigger_prototypes:
+                - uuid: b311478b97ea4068991c08090c326439
+                  expression: 'nodata(/EHEIM Digital/eheim.ledcontrol.series.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.ledcontrol.series.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: 8095621e7f5241faab7f12f5b57ba017
+              name: 'Light power of Plants Gold color'
+              type: DEPENDENT
+              key: 'light.color.plants.gold[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              units: '%'
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '{"title":"CCV".*'
+                    - \0
+                  error_handler: DISCARD_VALUE
+                - type: JSONPATH
+                  parameters:
+                    - '$.currentValues[1]'
+              master_item:
+                key: 'eheim.ledcontrol.series.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: 'LEDcontrol series'
+            - uuid: 312441395f9f4f35979889e4ac8ef076
+              name: 'Light power of Royal Blue color'
+              type: DEPENDENT
+              key: 'light.color.royal.blue[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              units: '%'
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '{"title":"CCV".*'
+                    - \0
+                  error_handler: DISCARD_VALUE
+                - type: JSONPATH
+                  parameters:
+                    - '$.currentValues[2]'
+              master_item:
+                key: 'eheim.ledcontrol.series.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: 'LEDcontrol series'
+            - uuid: 4d6c3b7b9fd347beb4ab441b6a1f769c
+              name: 'Light power of White color'
+              type: DEPENDENT
+              key: 'light.color.white[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              units: '%'
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '{"title":"CCV".*'
+                    - \0
+                  error_handler: DISCARD_VALUE
+                - type: JSONPATH
+                  parameters:
+                    - '$.currentValues[0]'
+              master_item:
+                key: 'eheim.ledcontrol.series.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: 'LEDcontrol series'
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: ef54fbb588bb49b0a4f0e6c6535e0795
+          name: 'Discovery pHcontrol+e'
+          type: DEPENDENT
+          key: discovery.phcontrol
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: PH
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 7385a0976a4f4ca4a3ab1cdc27b66ed3
+              name: 'pH data get from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.ph.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/phcontrol'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: pHcontrol+e
+                - tag: raw
+              trigger_prototypes:
+                - uuid: 0d581f9ee3c04c30905330c16f43f1d1
+                  expression: 'nodata(/EHEIM Digital/eheim.ph.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.ph.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: 5f8277a027c64958bc83b953deebd0ea
+              name: 'Service time {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'ph.service.time[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              units: '!d'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.serviceTime
+              master_item:
+                key: 'eheim.ph.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: pHcontrol+e
+              trigger_prototypes:
+                - uuid: 3f3762682b0145fa9e81dd0c735a18c0
+                  expression: 'last(/EHEIM Digital/ph.service.time[{#DEVICE.MAC}])<{$PH.SERVICE.TIME}'
+                  name: 'Serivce time on {#DEVICE.NAME}'
+                  event_name: 'Serivce time on {#DEVICE.NAME} is less then {$PH.SERVICE.TIME}'
+                  opdata: 'Service time: {ITEM.LASTVALUE}'
+                  priority: AVERAGE
+            - uuid: 72a8c4a6a55f4daa88a4b113581882c5
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'ph.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+                - type: NOT_MATCHES_REGEX
+                  parameters:
+                    - ^$
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Not synchronised!'
+              master_item:
+                key: 'eheim.ph.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: pHcontrol+e
+            - uuid: be1457dbf73242b1b6859adf33c73bc8
+              name: 'pH Value {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'ph.value[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: '!pH'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isPH
+                - type: STR_REPLACE
+                  parameters:
+                    - '[]'
+                    - ''
+                - type: REGEX
+                  parameters:
+                    - (\d)(\d)
+                    - \1.\2
+              master_item:
+                key: 'eheim.ph.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: pHcontrol+e
+              trigger_prototypes:
+                - uuid: c50e2928d4f8427aa318f23ac3b446a5
+                  expression: |
+                    max(/EHEIM Digital/ph.value[{#DEVICE.MAC}],{$TRIGGER.PH.TIME})={$MIN.PH}
+                    or
+                    min(/EHEIM Digital/ph.value[{#DEVICE.MAC}],{$TRIGGER.PH.TIME})={$MAX.PH}
+                  name: 'PH is not in range!'
+                  event_name: 'PH is not in range! {ITEM.VALUE}'
+                  opdata: 'Actual value: {ITEM.LASTVALUE}'
+                  priority: AVERAGE
+            - uuid: 145dcb870b8e4cf8ad01a60415b91b65
+              name: 'Valve status on {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'ph.valve.is.active[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Valve is active'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.valveIsActive
+                - type: STR_REPLACE
+                  parameters:
+                    - '[]'
+                    - ''
+              master_item:
+                key: 'eheim.ph.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: pHcontrol+e
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: 3c037085a6434b639aa60c6ac41408b9
+          name: 'Discovery professionel5e'
+          type: DEPENDENT
+          key: discovery.professionel5e
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: (AF_WITHOUT_HEAT|WITH_THERMO)
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 26440e3125754c1db8f1ccf7132c8171
+              name: 'professionel5e data from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/professionel5e'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+                - tag: raw
+              trigger_prototypes:
+                - uuid: f2cdd1d7a98a4a12a318a0818970afaa
+                  expression: 'nodata(/EHEIM Digital/eheim.professionel5e.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.professionel5e.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: f6d7e10d25ba44d4a0da733a4f99e2b2
+              name: 'Actual water flow setting'
+              type: CALCULATED
+              key: 'filter.actual.water.flow[{#DEVICE.MAC}]'
+              history: 7d
+              units: '!l'
+              params: '(last(//filter.dfs[{#DEVICE.MAC}]) * last(//filter.dfsFaktor[{#DEVICE.MAC}])) / ((last(//filter.dfs[{#DEVICE.MAC}]) * last(//filter.dfsFaktor[{#DEVICE.MAC}])) / last(//filter.soll.step[{#DEVICE.MAC}]))'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+            - uuid: 6b01efab58544df9bfa66340502ba7fc
+              name: 'dfs Faktor {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'filter.dfsFaktor[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Filter is active'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.dfsFaktor
+              master_item:
+                key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+            - uuid: cf86a86b9d034d04aa360ecb0a993188
+              name: 'dfs {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'filter.dfs[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Filter is active'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.dfs
+              master_item:
+                key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+            - uuid: 01d43bcec5c24c5fab9708ec98f7486e
+              name: 'Activity {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'filter.is.active[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Filter is active'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.filterActive
+                - type: STR_REPLACE
+                  parameters:
+                    - '[]'
+                    - ''
+              master_item:
+                key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+            - uuid: 28aaf780a79d4cb09226a7da32f9f035
+              name: 'Service time in {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'filter.service.time[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              units: '!d'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.serviceHour
+                - type: STR_REPLACE
+                  parameters:
+                    - '[]'
+                    - ''
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      // Convert value to days with rounding
+                      function convertToDays(value)   {
+                        var days = value / 24; // Assuming the value is in hours
+                          return Math.round(days); // Round to whole numbers
+                      }
+
+                      // Usage:
+                      var inputValue = value; // Input value to convert to days
+                      var convertedValue = convertToDays(inputValue);
+                      
+                        return convertedValue;
+              master_item:
+                key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+              trigger_prototypes:
+                - uuid: 48820fa7d51248cab22ce4b38e4c69b9
+                  expression: 'last(/EHEIM Digital/filter.service.time[{#DEVICE.MAC}])<{$FILTER.SERVICE.TIME}'
+                  name: 'Service time on {#DEVICE.NAME}'
+                  event_name: 'Service time on {#DEVICE.NAME} is less then {$UV.SERVICE.TIME}'
+                  opdata: 'Service time: {ITEM.LASTVALUE}'
+                  priority: WARNING
+            - uuid: 3056660a941e4be5b6e42eb14dcd8f37
+              name: 'Required flow setting {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'filter.soll.step[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              units: '!l'
+              valuemap:
+                name: 'Filter is active'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.sollStep
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      /*
+                      This script converts the input "sollStep" (an index from the API)   into a flow rate.
+                      It uses the following macros:
+                        {$FILTER.MEASUREMENT}   - Expected measurement unit: "litres" or "gallons"
+                        {$FILTER.MODEL}         - Filter model: "700", "600T", "450", or "350"
+                      Note:   Models "700" and "600T" share the same mapping.
+                      
+                      Mapping tables   (flow rates in litres per hour):
+                      
+                      For models "700" or "600T" :
+                         Index:   0    1    2    3    4    5    6    7    8    9    10    11    12   13   14
+                        Flow: [400, 470, 540, 600, 650, 700, 745, 785,  825,  865, 905, 945, 985, 1025, 1065]
+                      
+                      For model "450":
+                        Flow:  [400,  460, 515, 565, 610, 650, 690, 730, 770, 805, 840, 875, 910, 945,  980]
+                       
+                      For model "350":
+                        Flow: [400, 440, 480, 515, 550, 585,  620, 650,  680, 710, 740, 770, 800, 830, 860]
+                      
+                      If measurement is " gallons" , the flow (in litres) is converted using 1 litre = 0.264172  gallons.
+                       */
+                      
+                      var sollStep = value;  // 'value' is the input (the  "sollStep"  index from the API)
+                      
+                      // Retrieve macros for filter model  and measurement  unit.
+                      var model = "{$FILTER.MODEL}";
+                      var measurement  = "{$FILTER.MEASUREMENT}" ;
+                      
+                      // Define mapping table based on the  model.
+                      var mapping = [];
+                      
+                       if(model == "700" || model == "600T" ) {
+                          mapping = [400, 470,  540, 600, 650, 700, 745, 785, 825, 865,  905, 945, 985, 1025, 1065];
+                       } else if(model == "450") {
+                          mapping  = [400, 460, 515, 565, 610,  650, 690, 730, 770, 805, 840, 875, 910,  945, 980];
+                      } else if(model  == "350") {
+                          mapping = [400, 440,  480, 515, 550, 585, 620, 650,  680, 710, 740, 770, 800, 830, 860];
+                       } else {
+                          // If the model is  unrecognized, return the original value.
+                           return value;
+                      }
+                      
+                      //  Ensure the input index is within the mapping  range.
+                      if (sollStep <  0 || sollStep >= mapping.length) {
+                          // If  out of range, return the  last available value (adjust as needed).
+                           return mapping[mapping.length  - 1];
+                      }
+                      
+                      // Convert the index to  flow rate in litres per hour.
+                       var flow = mapping[sollStep];
+                      
+                      //  Convert to gallons if measurement  unit is "gallons".
+                      if (measurement.toLowerCase()  == "gallons")  {
+                          flow = flow * 0.264172;
+                      }
+                      
+                      return flow;
+              master_item:
+                key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+            - uuid: 248a8b385897424e95bc8feb83db3f25
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'filter.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+                - type: NOT_MATCHES_REGEX
+                  parameters:
+                    - ^$
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Not synchronised!'
+              master_item:
+                key: 'eheim.professionel5e.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: professionel5e
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: e07ab8e4bbc1400786e0eb942037ee7a
+          name: 'Discovery reeflexUV+e'
+          type: DEPENDENT
+          key: discovery.reeflexuv
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: reeflex
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: eb010b4a5f224796bcf6338ec9bfc457
+              name: 'UV data get from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.reflex.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/reeflexuv'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: reeflexUV+e
+                - tag: raw
+              trigger_prototypes:
+                - uuid: df2dcb9ef3944f56a1c7f497f6a0f679
+                  expression: 'nodata(/EHEIM Digital/eheim.reflex.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.reflex.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: c6946d112f0449bbaa81fe6c721198a9
+              name: 'Lighting booster - {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'uv.lighting.booster[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'UV Light'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.booster
+                - type: STR_REPLACE
+                  parameters:
+                    - '[]'
+                    - ''
+              master_item:
+                key: 'eheim.reflex.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: reeflexUV+e
+            - uuid: 1d75786ab20a4b27b5c2bcc9852bdd08
+              name: 'Lighting - {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'uv.lighting[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'UV Light'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isLighting
+                - type: STR_REPLACE
+                  parameters:
+                    - '[]'
+                    - ''
+              master_item:
+                key: 'eheim.reflex.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: reeflexUV+e
+            - uuid: 481c6532d732401fbadbc74b57b35af5
+              name: 'Service time {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'uv.service.time[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              units: '!d'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.timeUntilNextService
+              master_item:
+                key: 'eheim.reflex.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: reeflexUV+e
+              trigger_prototypes:
+                - uuid: 1b1fdd3cca6d4fc1a932bbe60e3698a0
+                  expression: 'last(/EHEIM Digital/uv.service.time[{#DEVICE.MAC}])<{$UV.SERVICE.TIME}'
+                  name: 'Service time on {#DEVICE.NAME}'
+                  event_name: 'Service time on {#DEVICE.NAME} is less then {$UV.SERVICE.TIME}'
+                  opdata: 'Service time: {ITEM.LASTVALUE}'
+                  priority: WARNING
+            - uuid: 64c009d8bc4348debd5ac96f0b7de155
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'uv.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+                - type: NOT_MATCHES_REGEX
+                  parameters:
+                    - ^$
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Not synchronised!'
+              master_item:
+                key: 'eheim.reflex.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: reeflexUV+e
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: 42fb022fe87d48c6820c56e55948f054
+          name: 'Discovery aquaAlert'
+          type: DEPENDENT
+          key: discovery.aquaalert
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: CM
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 5d42790e807244f293ed04e6b8ba8403
+              name: 'aquaAlert data from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/aquaalert'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+                - tag: raw
+              trigger_prototypes:
+                - uuid: 958b7a1a40674411b5e65b31e345fc67
+                  expression: 'nodata(/EHEIM Digital/eheim.aquaalert.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.aquaalert.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: a33db4b3a4b7468d816dd26273bb19c3
+              name: 'Alert state {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.alert.state[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.alertState
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+              trigger_prototypes:
+                - uuid: 45794b5fb0414bf086bc19c78c09d776
+                  expression: 'last(/EHEIM Digital/aquaalert.alert.state[{#DEVICE.MAC}])<>0'
+                  name: 'Alert state detected on {#DEVICE.NAME}'
+                  opdata: 'Alert state: {ITEM.LASTVALUE}'
+                  priority: HIGH
+            - uuid: 04927f2430b94634b68018e592d6650c
+              name: 'Alert state decoded {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.alert.state.decoded[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.alertState
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var v = parseInt(value);
+                      var bits = [];
+                      for (var i = 0; i < 11; i++) {
+                          if (v & (1 << i)) bits.push('Bit ' + i);
+                      }
+                      return bits.length > 0 ? bits.join(', ') : 'No alerts';
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+            - uuid: 9730ddf6535e4bc9abfddcf13debc4b2
+              name: 'Conductance {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.conductance[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: '!uS/cm'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isConductance
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+            - uuid: 399c6382c9644c30b4905dfcdcf1d7a8
+              name: 'Reference conductance {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.conductance.reference[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: '!uS/cm'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.errorConductance
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+            - uuid: 11494ef64fc24871b54f3df2924bb7c4
+              name: 'Pollution mode {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.pollution.mode[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.pollutionMode
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+            - uuid: 62870884465a43e59d0c35ca29ee24f3
+              name: 'Water pollution level {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.pollution.level[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: '%'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.waterPollutionLevel
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+              trigger_prototypes:
+                - uuid: 08548337e781423ab3ff7f1c97d956e9
+                  expression: 'last(/EHEIM Digital/aquaalert.pollution.level[{#DEVICE.MAC}])>{$AQUAALERT.MAX.POLLUTION}'
+                  name: 'Water pollution level is high on {#DEVICE.NAME}'
+                  event_name: 'Water pollution level is more than {$AQUAALERT.MAX.POLLUTION}% on {#DEVICE.NAME}'
+                  opdata: 'Pollution level: {ITEM.LASTVALUE}'
+                  priority: HIGH
+            - uuid: da7a0a2faa8541e191fac9adaf6d6fdc
+              name: 'Service time sensor {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.service.time.sensor[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              units: '!d'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.serviceTimeSensor
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+              trigger_prototypes:
+                - uuid: bb6267a18c494275bb6bb94732c4253d
+                  expression: 'last(/EHEIM Digital/aquaalert.service.time.sensor[{#DEVICE.MAC}])<{$AQUAALERT.SERVICE.SENSOR}'
+                  name: 'Service time sensor on {#DEVICE.NAME}'
+                  event_name: 'Service time sensor on {#DEVICE.NAME} is less than {$AQUAALERT.SERVICE.SENSOR} days'
+                  opdata: 'Service time: {ITEM.LASTVALUE}'
+                  priority: AVERAGE
+            - uuid: 51ad914173ea498e9dcb10fd8d05afa0
+              name: 'Service time water change {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.service.time.waterchange[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              units: '!d'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.serviceTimeWaterChange
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+              trigger_prototypes:
+                - uuid: 131f8f6c8a7c4937a2bd321c609ea433
+                  expression: 'last(/EHEIM Digital/aquaalert.service.time.waterchange[{#DEVICE.MAC}])<{$AQUAALERT.SERVICE.WATERCHANGE}'
+                  name: 'Service time water change on {#DEVICE.NAME}'
+                  event_name: 'Service time water change on {#DEVICE.NAME} is less than {$AQUAALERT.SERVICE.WATERCHANGE} days'
+                  opdata: 'Service time: {ITEM.LASTVALUE}'
+                  priority: AVERAGE
+            - uuid: bbbaae45a03b4118a08c689f86922451
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+                - type: NOT_MATCHES_REGEX
+                  parameters:
+                    - ^$
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Not synchronised!'
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+            - uuid: 04f062a91bba4b12b95e2859a571ce8e
+              name: 'Temperature {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'aquaalert.temperature[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: °C
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isTemperature
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'return +(value / 10).toFixed(1);'
+              master_item:
+                key: 'eheim.aquaalert.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: aquaAlert
+              trigger_prototypes:
+                - uuid: 9a36c7ad0d6b4b858d271dd5b911c0e9
+                  expression: 'avg(/EHEIM Digital/aquaalert.temperature[{#DEVICE.MAC}],{$TEMP.AVG.TIME})>{$MAX.TEMP}'
+                  name: 'Temperature is high on {#DEVICE.NAME}'
+                  event_name: 'Temperature is more than {$MAX.TEMP} on {#DEVICE.NAME}'
+                  opdata: 'Actual temperature is: {ITEM.LASTVALUE}'
+                  priority: WARNING
+                - uuid: 981915b6add648ada00f31629ca47bea
+                  expression: 'avg(/EHEIM Digital/aquaalert.temperature[{#DEVICE.MAC}],{$TEMP.AVG.TIME})<{$MIN.TEMP}'
+                  name: 'Temperature is too low on {#DEVICE.NAME}'
+                  event_name: 'Temperature is less than {$MIN.TEMP} on {#DEVICE.NAME}'
+                  opdata: 'Actual temperature is: {ITEM.LASTVALUE}'
+                  priority: WARNING
+          master_item:
+            key: eheim.device.discovery.raw
+        - uuid: 37ed622d2b0647efab17aa7528b5aba0
+          name: 'Discovery thermocontrol'
+          type: DEPENDENT
+          key: discovery.thermocontrol
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#DEVICE.TYPE}'
+                value: '\"HEAT\d+'
+                formulaid: A
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: b7237c797979499ab4d0480bf6b4ed9f
+              name: 'Thermocontrol data from {#DEVICE.NAME}'
+              type: HTTP_AGENT
+              key: 'eheim.thermocontrol.raw[{#DEVICE.MAC}]'
+              history: 1h
+              value_type: TEXT
+              trends: '0'
+              authtype: BASIC
+              username: '{$API.USER}'
+              password: '{$API.PASS}'
+              preprocessing:
+                - type: CHECK_NOT_SUPPORTED
+                  parameters:
+                    - '-1'
+              timeout: 10s
+              url: 'http://{$API.HOST}/api/thermocontrol'
+              query_fields:
+                - name: to
+                  value: '{#DEVICE.MAC}'
+              tags:
+                - tag: EHEIM
+                  value: thermocontrol+
+                - tag: raw
+              trigger_prototypes:
+                - uuid: d7b3693ecdff498e80cb83b142cc32fd
+                  expression: 'nodata(/EHEIM Digital/eheim.thermocontrol.raw[{#DEVICE.MAC}],{$API.NO.DATA})=1'
+                  name: 'No data eheim.thermocontrol.raw[{#DEVICE.NAME}]'
+                  priority: WARNING
+                  dependencies:
+                    - name: 'API not returning data (Device discovery raw)'
+                      expression: 'nodata(/EHEIM Digital/eheim.device.discovery.raw,{$API.NO.DATA.MSTR})=1'
+            - uuid: 84d5f7a84ac84d818e9e57c4c970d4d7
+              name: 'Heating {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'thermocontrol.is.heating[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: Heater
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isHeating
+              master_item:
+                key: 'eheim.thermocontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: thermocontrol+
+            - uuid: c3b06d14c79942c5a0bdd091f783964e
+              name: 'Sync partner for {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'thermocontrol.sync.partner[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.partnerName
+                - type: NOT_MATCHES_REGEX
+                  parameters:
+                    - ^$
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: 'Not synchronised!'
+              master_item:
+                key: 'eheim.thermocontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: thermocontrol+
+            - uuid: ac25130fa98449b5814602708c2fff16
+              name: 'Target temperature {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'thermocontrol.target.temperature[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: °C
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.sollTemp
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'return +(value / 10).toFixed(1);'
+              master_item:
+                key: 'eheim.thermocontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: thermocontrol+
+            - uuid: 1cfb1d870db143b7aafde625d65baf03
+              name: 'Temperature {#DEVICE.NAME}'
+              type: DEPENDENT
+              key: 'thermocontrol.temperature[{#DEVICE.MAC}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: °C
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.isTemp
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'return +(value / 10).toFixed(1);'
+              master_item:
+                key: 'eheim.thermocontrol.raw[{#DEVICE.MAC}]'
+              tags:
+                - tag: EHEIM
+                  value: thermocontrol+
+              trigger_prototypes:
+                - uuid: e2ec23e15ab145c6831aa648144bcd23
+                  expression: 'avg(/EHEIM Digital/thermocontrol.temperature[{#DEVICE.MAC}],{$TEMP.AVG.TIME})>{$MAX.TEMP}'
+                  name: 'Temperature is high on {#DEVICE.NAME}'
+                  event_name: 'Temperature is more then {$MAX.TEMP} on {#DEVICE.NAME}'
+                  opdata: 'Actual temperature is: {ITEM.LASTAVALUE}'
+                  priority: WARNING
+                - uuid: 3dfe7683d6fa47e19b309c1b9c6f4167
+                  expression: 'avg(/EHEIM Digital/thermocontrol.temperature[{#DEVICE.MAC}],{$TEMP.AVG.TIME})<{$MIN.TEMP}'
+                  name: 'Temperature is too low on {#DEVICE.NAME}'
+                  event_name: 'Temperature is less then {$MIN.TEMP} on {#DEVICE.NAME}'
+                  opdata: 'Actual temperature is: {ITEM.LASTAVALUE}'
+                  priority: WARNING
+          master_item:
+            key: eheim.device.discovery.raw
+      macros:
+        - macro: '{$API.HOST}'
+          value: 192.168.1.1
+          description: 'Local API endpoint (IP or URL). Change if the API runs elsewhere.'
+        - macro: '{$API.NO.DATA}'
+          value: 15m
+          description: 'Time (e.g. 15m) after which missing data will be treated as a problem.'
+        - macro: '{$API.NO.DATA.MSTR}'
+          value: 5m
+          description: 'Time (e.g., 5m) after which nodata is raised for the master item. Should be shorter than LLD.'
+        - macro: '{$API.PASS}'
+          value: admin
+          description: 'Default API password – change it via the /changeauth endpoint (see https://api.eheimdigital.com/docs/eheim_digital_api/changeauth).'
+        - macro: '{$API.USER}'
+          value: api
+          description: 'Username for the EHEIM Digital API.'
+        - macro: '{$AQUAALERT.MAX.POLLUTION}'
+          value: '90'
+          description: 'Max. water pollution level (%). Triggers when pollution exceeds this percentage.'
+        - macro: '{$AQUAALERT.SERVICE.SENSOR}'
+          value: '5'
+          description: 'Min. days until sensor service. Triggers when remaining days drop below this value.'
+        - macro: '{$AQUAALERT.SERVICE.WATERCHANGE}'
+          value: '5'
+          description: 'Min. days until water change. Triggers when remaining days drop below this value.'
+        - macro: '{$FILTER.MEASUREMENT}'
+          value: litres
+          description: 'Expected measurement unit: "litres" or "gallons"'
+        - macro: '{$FILTER.MODEL}'
+          value: 600T
+          description: 'Filter model: "700", "600T", "450", or "350"'
+        - macro: '{$FILTER.SERVICE.TIME}'
+          value: '30'
+          description: 'Remaining filter-service days. Triggers when the calculated “service time” of an EHEIM filter drops below this number of days.'
+        - macro: '{$MAX.PH}'
+          value: '7'
+          description: 'Upper pH limit. Averages above this value are considered out of range.'
+        - macro: '{$MAX.TEMP}'
+          value: '30'
+          description: 'Upper temperature limit (°C). Average water temperature above this value raises an alert.'
+        - macro: '{$MIN.FEEDER.FILL}'
+          value: '20'
+          description: 'Minimum feeder fill (%). Triggers when the autofeeder’s fill level falls below this percentage.'
+        - macro: '{$MIN.PH}'
+          value: '6.2'
+          description: 'Lower pH limit. Averages below this value are considered out of range.'
+        - macro: '{$MIN.TEMP}'
+          value: '20'
+          description: 'Lower temperature limit (°C). Average water temperature below this value raises an alert.'
+        - macro: '{$PH.SERVICE.TIME}'
+          value: '5'
+          description: 'Remaining pH-probe service days. Triggers when the probe’s “service time” drops below this number of days.'
+        - macro: '{$TEMP.AVG.TIME}'
+          value: 15m
+          description: 'Averaging window for temperature (time period used in temperature triggers).'
+        - macro: '{$TRIGGER.PH.TIME}'
+          value: 4h
+          description: 'Averaging window for pH (time period used to check pH range).'
+        - macro: '{$UV.SERVICE.TIME}'
+          value: '30'
+          description: 'Remaining UV-unit service days. Triggers when time until next UV lamp service is below this number of days.'
+      valuemaps:
+        - uuid: bd117d5963e24c759de34e8f6e1841a7
+          name: 'Alert status'
+          mappings:
+            - value: '0'
+              newvalue: 'No Fault'
+            - value: '1'
+              newvalue: 'High Temperature'
+            - value: '2'
+              newvalue: 'Low Temperature'
+        - uuid: b174af7c888c4338a659f5dbe9fa227b
+          name: 'Cooling status'
+          mappings:
+            - value: '0'
+              newvalue: 'No'
+            - value: '1'
+              newvalue: 'Yes'
+        - uuid: 779e1236eb7745779c929a540957d376
+          name: 'Filter is active'
+          mappings:
+            - value: '0'
+              newvalue: 'OFF'
+            - value: '1'
+              newvalue: Active
+        - uuid: 534ea0c849a04bd3b52fa237f1147776
+          name: 'Firmware update'
+          mappings:
+            - value: '0'
+              newvalue: 'Up to date'
+            - value: '1'
+              newvalue: 'Update available'
+        - uuid: c13026a6a90347aea35b0ce1c2dad44c
+          name: Heater
+          mappings:
+            - value: '0'
+              newvalue: 'OFF'
+            - value: '1'
+              newvalue: Heating
+        - uuid: da6304837a9d4407a5cda93857f6f071
+          name: 'Heating status'
+          mappings:
+            - value: '0'
+              newvalue: 'No'
+            - value: '1'
+              newvalue: 'Yes'
+        - uuid: 7c87d3d1a9904db3a22902cf659412d3
+          name: 'Overfeeding status'
+          mappings:
+            - value: '0'
+              newvalue: Disabled
+            - value: '1'
+              newvalue: Enabled
+        - uuid: 627004c5a91a4b3b91b17b222362fe47
+          name: 'UV Light'
+          mappings:
+            - value: '1'
+              newvalue: 'ON'
+            - value: '0'
+              newvalue: 'OFF'
+        - uuid: 1a15a74503594c85a7ef064a9c2518ed
+          name: 'Valve is active'
+          mappings:
+            - value: '0'
+              newvalue: Close
+            - value: '1'
+              newvalue: Open

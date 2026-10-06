@@ -1,0 +1,106 @@
+zabbix_export:
+  version: '5.2'
+  date: '2022-11-03T11:23:19Z'
+  groups:
+    -
+      name: Followers
+  templates:
+    -
+      template: 'LinkedIn followers - InitMAX'
+      name: 'LinkedIn followers - InitMAX'
+      description: |
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      groups:
+        -
+          name: Followers
+      applications:
+        -
+          name: 'LinkedIn followers'
+      items:
+        -
+          name: 'LinkedIn: {$LINKEDIN.COMPANY.NAME} page followers count'
+          type: SCRIPT
+          key: 'linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}]'
+          delay: 5m
+          params: |
+            params = JSON.parse(value)
+            
+            var request = new CurlHttpRequest();
+            return request.Get("https://www.linkedin.com/pages-extensions/FollowCompany?id=" + params.companyId + "&counter=bottom");
+          applications:
+            -
+              name: 'LinkedIn followers'
+          preprocessing:
+            -
+              type: REGEX
+              parameters:
+                - 'follower-count">(\S+)<'
+                - \1
+            -
+              type: STR_REPLACE
+              parameters:
+                - ','
+                - ''
+          parameters:
+            -
+              name: companyId
+              value: '{$LINKEDIN.COMPANY.ID}'
+          triggers:
+            -
+              expression: '{last()}<{prev()}'
+              recovery_mode: NONE
+              name: '{$LINKEDIN.COMPANY.NAME} has lost follower on LinkedIn!'
+              priority: WARNING
+              manual_close: 'YES'
+            -
+              expression: '{count({$LINKEDIN.COMPANY.M.GRACE},{$LINKEDIN.COMPANY.M1})}>0'
+              name: '{$LINKEDIN.COMPANY.NAME} has reached {$LINKEDIN.COMPANY.M1} followers on LinkedIn!'
+              url: '{$LINKEDIN.COMPANY.URL}'
+              priority: INFO
+              manual_close: 'YES'
+            -
+              expression: '{count({$LINKEDIN.COMPANY.M.GRACE},{$LINKEDIN.COMPANY.M2})}>0'
+              name: '{$LINKEDIN.COMPANY.NAME} has reached {$LINKEDIN.COMPANY.M2} followers on LinkedIn!'
+              url: '{$LINKEDIN.COMPANY.URL}'
+              priority: INFO
+              manual_close: 'YES'
+            -
+              expression: '{count({$LINKEDIN.COMPANY.M.GRACE},{$LINKEDIN.COMPANY.M3})}>0'
+              name: '{$LINKEDIN.COMPANY.NAME} has reached {$LINKEDIN.COMPANY.M3} followers on LinkedIn!'
+              url: '{$LINKEDIN.COMPANY.URL}'
+              priority: INFO
+              manual_close: 'YES'
+      macros:
+        -
+          macro: '{$LINKEDIN.COMPANY.ID}'
+          value: '76503092'
+          description: 'Company ID'
+        -
+          macro: '{$LINKEDIN.COMPANY.M.GRACE}'
+          value: 1h
+          description: 'Milestone Grace Time'
+        -
+          macro: '{$LINKEDIN.COMPANY.M1}'
+          value: '100'
+          description: 'First Milestone'
+        -
+          macro: '{$LINKEDIN.COMPANY.M2}'
+          value: '500'
+          description: 'Second Milestone'
+        -
+          macro: '{$LINKEDIN.COMPANY.M3}'
+          value: '1000'
+          description: 'Third Milestone'
+        -
+          macro: '{$LINKEDIN.COMPANY.NAME}'
+          value: initMAX
+          description: 'Company Nane'
+        -
+          macro: '{$LINKEDIN.COMPANY.URL}'
+          value: 'https://www.linkedin.com/company/initmax'
+          description: 'Company URL'
+ 

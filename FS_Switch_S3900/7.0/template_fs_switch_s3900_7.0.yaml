@@ -1,0 +1,1121 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 3a8193f185ec451e99eba349d73adf7e
+      template: 'FS Switch S3900 SNMP'
+      name: 'FS Switch S3900 SNMP'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 6734d29b41164153b6990d092c4ae020
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: icmpping
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 3b84fc69d681449a9d4dce4a1b65d450
+              expression: 'max(/FS Switch S3900 SNMP/icmpping,#3)=0'
+              name: 'FS Switch: Unavailable by ICMP ping'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: e76cd3ba6d234dfb9a76ac6cce681da8
+          name: 'ICMP loss'
+          type: SIMPLE
+          key: icmppingloss
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: e82344c419ae49a1a4ed155d468534eb
+              expression: 'min(/FS Switch S3900 SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/FS Switch S3900 SNMP/icmppingloss,5m)<100'
+              name: 'FS Switch: High ICMP ping loss'
+              opdata: 'Loss: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'FS Switch: Unavailable by ICMP ping'
+                  expression: 'max(/FS Switch S3900 SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: 5e56b8a9d0864038b897499287d786fd
+          name: 'ICMP response time'
+          type: SIMPLE
+          key: icmppingsec
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: b1b6781b5bf945cabfe87f87eff6d51f
+              expression: 'avg(/FS Switch S3900 SNMP/icmppingsec,5m)>{$ICMP_RESPONSE_TIME_WARN}'
+              name: 'FS Switch: High ICMP ping response time'
+              opdata: 'Value: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'FS Switch: High ICMP ping loss'
+                  expression: 'min(/FS Switch S3900 SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/FS Switch S3900 SNMP/icmppingloss,5m)<100'
+                - name: 'FS Switch: Unavailable by ICMP ping'
+                  expression: 'max(/FS Switch S3900 SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: 7c1b9d66d7db4a0296e2c60edb92ad4b
+          name: 'FS Switch: SNMP walk network interfaces'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.2.2.1.8,1.3.6.1.2.1.2.2.1.7,1.3.6.1.2.1.31.1.1.1.18,1.3.6.1.2.1.31.1.1.1.1,1.3.6.1.2.1.2.2.1.2,1.3.6.1.2.1.2.2.1.3,1.3.6.1.2.1.31.1.1.1.6,1.3.6.1.2.1.31.1.1.1.10,1.3.6.1.2.1.2.2.1.14,1.3.6.1.2.1.2.2.1.20,1.3.6.1.2.1.2.2.1.19,1.3.6.1.2.1.2.2.1.13,1.3.6.1.2.1.31.1.1.1.15]'
+          key: net.if.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of IF-MIB for network interface discovery and monitoring.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: f927cc5bc32c48b9b105eabad1ca3449
+          name: 'FS Switch: SNMP walk fans'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.52642.9.187.5.1.1.1,1.3.6.1.4.1.52642.9.187.5.1.1.3,1.3.6.1.4.1.52642.9.187.5.1.1.4,1.3.6.1.4.1.52642.9.187.5.1.1.5,1.3.6.1.4.1.52642.9.187.5.1.1.6,1.3.6.1.4.1.52642.9.187.5.1.1.7]'
+          key: sensor.fans.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Walk FS fan table at .9.187.5.1.1 (index, status, present, RPM, alarm)'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 209a28d057384488aba159abfc1a195c
+          name: 'FS Switch: SNMP walk PSUs'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.52642.9.189.5.1.1.1,1.3.6.1.4.1.52642.9.189.5.1.1.3,1.3.6.1.4.1.52642.9.189.5.1.1.4,1.3.6.1.4.1.52642.9.189.5.1.1.5]'
+          key: sensor.psu.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Walk FS PSU table at .9.189.5.1.1 (index, description, status, alarm)'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 51b0ef21a911477c8b66d826d1ee0f21
+          name: Temperature
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.9.48.1.0]'
+          key: sensor.temp.value
+          value_type: FLOAT
+          units: °C
+          description: 'Board temperature in Celsius'
+          tags:
+            - tag: component
+              value: memory
+          triggers:
+            - uuid: 0d87eda2f2024660bc63a1823bc040d9
+              expression: 'avg(/FS Switch S3900 SNMP/sensor.temp.value,5m)>{$TEMP.MAX.CRIT}'
+              name: 'FS Switch: Temperature critical (>{$TEMP.MAX.CRIT}°C)'
+              priority: HIGH
+              tags:
+                - tag: component
+                  value: temperature
+                - tag: scope
+                  value: availability
+            - uuid: 78834a9914284599900a7cf7adb03736
+              expression: 'avg(/FS Switch S3900 SNMP/sensor.temp.value,5m)>{$TEMP.MAX.WARN}'
+              name: 'FS Switch: Temperature warning (>{$TEMP.MAX.WARN}°C)'
+              priority: WARNING
+              dependencies:
+                - name: 'FS Switch: Temperature critical (>{$TEMP.MAX.CRIT}°C)'
+                  expression: 'avg(/FS Switch S3900 SNMP/sensor.temp.value,5m)>{$TEMP.MAX.CRIT}'
+              tags:
+                - tag: component
+                  value: temperature
+                - tag: scope
+                  value: performance
+        - uuid: 56625fd33b1744d2a206c85f3fe303a8
+          name: 'System contact details'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.4.0]'
+          key: 'system.contact[sysContact.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          inventory_link: CONTACT
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 44d9895399434075843b087a763b543c
+          name: 'CPU utilization (5s)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.9.109.1.1.1.1.3.1]'
+          key: system.cpu.util
+          value_type: FLOAT
+          units: '%'
+          description: 'CPU busy % over last 5 seconds (Cisco cpmCPUTotal5sec style)'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 5m
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: b93dfb924f44499fa90674cf3e5788da
+          name: 'CPU utilization (5min avg)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.9.109.1.1.1.1.5.1]'
+          key: system.cpu.util.avg
+          value_type: FLOAT
+          units: '%'
+          description: 'CPU busy % over last 5 minutes (Cisco cpmCPUTotal5minRev style)'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 5m
+          tags:
+            - tag: component
+              value: cpu
+          triggers:
+            - uuid: 92659c83c7c3410fa0044671745156f0
+              expression: 'min(/FS Switch S3900 SNMP/system.cpu.util.avg,5m)>{$CPU.UTIL.CRIT}'
+              name: 'FS Switch: High CPU utilization'
+              event_name: 'FS Switch: High CPU utilization (over {$CPU.UTIL.CRIT}% for 5m)'
+              opdata: 'Current utilization: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: aaea433e669a421bab5fd1579fdf41f4
+          name: 'System description'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.1.0]'
+          key: 'system.descr[sysDescr.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 9b5aa0adca3549b4835b55ab661b1f69
+          name: 'Hardware model name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.10.1.3.0]'
+          key: system.hw.model
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'FS enterprise MIB - switch model name'
+          inventory_link: MODEL
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+        - uuid: 5c874b62317a4127a3241c4fd1285ff4
+          name: 'Hardware serial number'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.10.1.4.0]'
+          key: system.hw.serialnumber
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'FS enterprise MIB - switch serial number'
+          inventory_link: SERIALNO_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 450f06f2ee3d4a15a3422b9a773b6c10
+              expression: 'last(/FS Switch S3900 SNMP/system.hw.serialnumber,#1)<>last(/FS Switch S3900 SNMP/system.hw.serialnumber,#2) and length(last(/FS Switch S3900 SNMP/system.hw.serialnumber))>0'
+              name: 'FS Switch: Device has been replaced'
+              event_name: 'FS Switch: Device has been replaced (new serial number received)'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: c891bfb99afc4bc9b7cd13d4de2f638c
+          name: 'Uptime (FS)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.13.0]'
+          key: 'system.hw.uptime[fsUptime.0]'
+          delay: 30s
+          value_type: FLOAT
+          trends: '0'
+          units: uptime
+          description: 'FS enterprise MIB - system uptime timeticks'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: component
+              value: system
+        - uuid: 6795aa909e534e91827f538130480534
+          name: 'Hardware version'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.10.1.5.0]'
+          key: system.hw.version
+          value_type: CHAR
+          trends: '0'
+          description: 'FS enterprise MIB - hardware version'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 1be62ada4c20433bb07eb2ba51e43c57
+          name: 'System location'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.6.0]'
+          key: 'system.location[sysLocation.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          inventory_link: LOCATION
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 9b5c1fdb7a0a49718aa510c0a3a0f0b5
+          name: 'System name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.5.0]'
+          key: system.name
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          inventory_link: NAME
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: b498c2a028194834b0b07f256bceb31c
+              expression: 'last(/FS Switch S3900 SNMP/system.name,#1)<>last(/FS Switch S3900 SNMP/system.name,#2) and length(last(/FS Switch S3900 SNMP/system.name))>0'
+              name: 'FS Switch: System name has changed'
+              event_name: 'FS Switch: System name has changed (new name: {ITEM.VALUE})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: f20f6275df044f39b1db1f4e4bb77ed0
+          name: 'Uptime (network)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.3.0]'
+          key: 'system.net.uptime[sysUpTime.0]'
+          delay: 30s
+          value_type: FLOAT
+          trends: '0'
+          units: uptime
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: component
+              value: system
+        - uuid: d999a8ca3b2943bebf4e87d91c2cd70b
+          name: 'System object ID'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.2.0]'
+          key: 'system.objectid[sysObjectID.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: aba28ff1849542cbb4e562938c4034ad
+          name: 'Overall system status'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.22.0]'
+          key: system.status
+          description: 'FS enterprise MIB - switchOperState'
+          valuemap:
+            name: 'FS-MIB::switchOperState'
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 3ad66fd64c14474da14779c36d1e0ab5
+              expression: 'last(/FS Switch S3900 SNMP/system.status)=5'
+              name: 'FS Switch: System in critical state'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 5406b3fb63f24231aec8acfeb8e772e3
+              expression: 'last(/FS Switch S3900 SNMP/system.status)=6'
+              name: 'FS Switch: System in nonrecoverable state'
+              priority: DISASTER
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: dcf8833c5bcd4f309ebc4ff7ec656c80
+          name: 'Product name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.21.0]'
+          key: system.sw.name
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'FS enterprise MIB - switch model name (scalar)'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+        - uuid: 103a709baf524c66b43a5c249a2c6c36
+          name: 'Firmware version'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.3.6.10.1.6.0]'
+          key: system.sw.version
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'FS enterprise MIB - full firmware version string'
+          inventory_link: SOFTWARE_APP_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 7386391310294d64a5c8fad9c718ae88
+              expression: 'last(/FS Switch S3900 SNMP/system.sw.version,#1)<>last(/FS Switch S3900 SNMP/system.sw.version,#2) and length(last(/FS Switch S3900 SNMP/system.sw.version))>0'
+              name: 'FS Switch: Firmware version has changed'
+              event_name: 'FS Switch: Firmware version has changed (new version: {ITEM.VALUE})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: e3f4e16251e04add96426fc33cae92d6
+          name: 'Memory: Utilization (raw)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.9.48.5.0]'
+          key: vm.memory.pfree
+          units: '%'
+          description: 'FS enterprise MIB - likely memory utilization percentage'
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 8e9435c9302e4939ba71f8c5b139f80f
+          name: 'Memory: Total'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.52642.9.48.2.0]'
+          key: vm.memory.total
+          delay: 5m
+          units: B
+          description: 'Total system memory in bytes'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 0acb8534e3264a54949b3a4b2e27358d
+          name: 'Memory: Utilization'
+          type: CALCULATED
+          key: vm.memory.util
+          value_type: FLOAT
+          units: '%'
+          params: last(//vm.memory.pfree)
+          description: 'Memory utilization calculated as 100 - memoryFreedInPercent'
+          tags:
+            - tag: component
+              value: memory
+          triggers:
+            - uuid: ee4e515e35ea469cb9cbe9c986fe5e64
+              expression: 'min(/FS Switch S3900 SNMP/vm.memory.util,5m)>{$MEMORY.UTIL.MAX}'
+              name: 'FS Switch: High memory utilization'
+              event_name: 'FS Switch: High memory utilization (>{$MEMORY.UTIL.MAX}% for 5m)'
+              priority: AVERAGE
+              tags:
+                - tag: scope
+                  value: capacity
+                - tag: scope
+                  value: performance
+        - uuid: 01b20d4515834adf99fa2799d3e474d8
+          name: 'SNMP agent availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 66887383951a49a09aa8e9f90cad4e34
+              expression: 'max(/FS Switch S3900 SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              name: 'FS Switch: No SNMP data collection'
+              opdata: 'Current state: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'FS Switch: Unavailable by ICMP ping'
+                  expression: 'max(/FS Switch S3900 SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+      discovery_rules:
+        - uuid: 4d5cb7c75f874351be8fda1e6a61b35c
+          name: 'Fan discovery'
+          type: DEPENDENT
+          key: fan.discovery
+          delay: '0'
+          description: 'Discovery of FS-MIB::switchFanTable.'
+          item_prototypes:
+            - uuid: 4c17bf1fd16d43108c25821b3fd2f268
+              name: 'Fan {#FAN_INDEX}: Speed'
+              type: DEPENDENT
+              key: 'sensor.fan.speed[{#SNMPINDEX}]'
+              delay: '0'
+              units: rpm
+              description: 'FS-MIB::switchFanOperSpeed in RPM'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.52642.9.187.5.1.1.6.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: sensor.fans.walk
+              tags:
+                - tag: component
+                  value: fan
+            - uuid: e3d684e6b8ea4d30811b1399b5a82bf6
+              name: 'Fan {#FAN_INDEX}: Status'
+              type: DEPENDENT
+              key: 'sensor.fan.status[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'FS-MIB::switchFanStatus (1=ok, 2=failure)'
+              valuemap:
+                name: 'FS-MIB::switchFanStatus'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.52642.9.187.5.1.1.4.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: sensor.fans.walk
+              tags:
+                - tag: component
+                  value: fan
+              trigger_prototypes:
+                - uuid: e1dd04168606499ebc7cbf9f23490494
+                  expression: 'last(/FS Switch S3900 SNMP/sensor.fan.status[{#SNMPINDEX}])=2'
+                  name: 'Fan {#FAN_INDEX}: Fan failure'
+                  opdata: 'Current state: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  tags:
+                    - tag: component
+                      value: fan
+                    - tag: scope
+                      value: availability
+          graph_prototypes:
+            - uuid: 1315aa972f8f41e0ae2a94dd88f0c8fc
+              name: 'Fan {#FAN_INDEX}: Speed'
+              graph_items:
+                - drawtype: BOLD_LINE
+                  color: 199C0D
+                  item:
+                    host: 'FS Switch S3900 SNMP'
+                    key: 'sensor.fan.speed[{#SNMPINDEX}]'
+          master_item:
+            key: sensor.fans.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#FAN_INDEX}'
+                - 1.3.6.1.4.1.52642.9.187.5.1.1.3
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: ea04ad2961c04285b928745810037d3f
+          name: 'Network interfaces discovery'
+          type: DEPENDENT
+          key: net.if.discovery
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '{$NET.IF.IFDESCR.MATCHES}'
+                formulaid: A
+              - macro: '{#IFDESCR}'
+                value: '{$NET.IF.IFDESCR.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+              - macro: '{#IFNAME}'
+                value: '{$NET.IF.IFNAME.MATCHES}'
+                formulaid: C
+              - macro: '{#IFNAME}'
+                value: '{$NET.IF.IFNAME.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: D
+          description: 'Discovering interfaces from IF-MIB.'
+          item_prototypes:
+            - uuid: 46ee2266775f483baa8f4af696887462
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets discarded'
+              type: DEPENDENT
+              key: 'net.if.in.discards[ifInDiscards.{#SNMPINDEX}]'
+              delay: '0'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.13.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 905cb60947b14539911c294fd6506b80
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets with errors'
+              type: DEPENDENT
+              key: 'net.if.in.errors[ifInErrors.{#SNMPINDEX}]'
+              delay: '0'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: 3ecbd759f12b49f896c01926192a2996
+                  expression: 'min(/FS Switch S3900 SNMP/net.if.in.errors[ifInErrors.{#SNMPINDEX}],5m)>{$IF.ERRORS.WARN}'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): High inbound error rate'
+                  event_name: 'Interface {#IFNAME}({#IFALIAS}): High inbound error rate (>{$IF.ERRORS.WARN} for 5m)'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                      expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                      recovery_expression: 'last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: beb8de70961d4945a41346a331cbbc57
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits received'
+              type: DEPENDENT
+              key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 5ec3717205854220bc8bd9c10e21ae74
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets discarded'
+              type: DEPENDENT
+              key: 'net.if.out.discards[ifOutDiscards.{#SNMPINDEX}]'
+              delay: '0'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.19.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 5bb2269db9444c2c835613b694d9eb98
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets with errors'
+              type: DEPENDENT
+              key: 'net.if.out.errors[ifOutErrors.{#SNMPINDEX}]'
+              delay: '0'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: e408d4e2611a44aab172d88538ffac00
+                  expression: 'min(/FS Switch S3900 SNMP/net.if.out.errors[ifOutErrors.{#SNMPINDEX}],5m)>{$IF.ERRORS.WARN}'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): High outbound error rate'
+                  event_name: 'Interface {#IFNAME}({#IFALIAS}): High outbound error rate (>{$IF.ERRORS.WARN} for 5m)'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                      expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                      recovery_expression: 'last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: 77360a6c84b94bd1a150df0827736c02
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits sent'
+              type: DEPENDENT
+              key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 9359286378f44436979518451ffb7a5c
+              name: 'Interface {#IFNAME}({#IFALIAS}): Speed'
+              type: DEPENDENT
+              key: 'net.if.speed[ifHighSpeed.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              units: bps
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.15.{#SNMPINDEX}'
+                    - '0'
+                - type: MULTIPLIER
+                  parameters:
+                    - '1000000'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: 282b6651da01421588782d92fd13d7d2
+                  expression: 'change(/FS Switch S3900 SNMP/net.if.speed[ifHighSpeed.{#SNMPINDEX}])<0 and last(/FS Switch S3900 SNMP/net.if.speed[ifHighSpeed.{#SNMPINDEX}])>0'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): Ethernet has changed to lower speed than expected'
+                  priority: INFO
+                  manual_close: 'YES'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: 17ebffeb0b6c4fac936e1b88ba2a720f
+              name: 'Interface {#IFNAME}({#IFALIAS}): Admin status'
+              type: DEPENDENT
+              key: 'net.if.status[ifAdminStatus.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.7.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: af3424a847004a30b969e46687662186
+              name: 'Interface {#IFNAME}({#IFALIAS}): Operational status'
+              type: DEPENDENT
+              key: 'net.if.status[ifOperStatus.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              valuemap:
+                name: 'IF-MIB::ifOperStatus'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: f6391f4e257d400fb51d7c80e9942c3c
+                  expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'last(/FS Switch S3900 SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: availability
+          graph_prototypes:
+            - uuid: c75a467e1d4747978111095d53f4da95
+              name: 'Interface {#IFNAME}({#IFALIAS}): Network traffic'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'FS Switch S3900 SNMP'
+                    key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  item:
+                    host: 'FS Switch S3900 SNMP'
+                    key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+          master_item:
+            key: net.if.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#IFOPERSTATUS}'
+                - 1.3.6.1.2.1.2.2.1.8
+                - '0'
+                - '{#IFADMINSTATUS}'
+                - 1.3.6.1.2.1.2.2.1.7
+                - '0'
+                - '{#IFALIAS}'
+                - 1.3.6.1.2.1.31.1.1.1.18
+                - '0'
+                - '{#IFNAME}'
+                - 1.3.6.1.2.1.31.1.1.1.1
+                - '0'
+                - '{#IFDESCR}'
+                - 1.3.6.1.2.1.2.2.1.2
+                - '0'
+                - '{#IFTYPE}'
+                - 1.3.6.1.2.1.2.2.1.3
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: e9cbfe63347f42608906d54e982bebac
+          name: 'PSU discovery'
+          type: DEPENDENT
+          key: psu.discovery
+          delay: '0'
+          description: 'Discovery of FS-MIB::switchIndivPowerTable.'
+          item_prototypes:
+            - uuid: 5a2a724d7bb24d80a425cbc8c242cb38
+              name: 'PSU {#PSU_INDEX}: Status'
+              type: DEPENDENT
+              key: 'sensor.psu.status[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'FS-MIB::swIndivPowerStatus (1=notPresent, 2=green/up, 3=red/down)'
+              valuemap:
+                name: 'FS::PSU status'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.52642.9.189.5.1.1.4.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: sensor.psu.walk
+              tags:
+                - tag: component
+                  value: power
+              trigger_prototypes:
+                - uuid: 911cf6c3dba54ff38b5d98c40f8c7d42
+                  expression: 'last(/FS Switch S3900 SNMP/sensor.psu.status[{#SNMPINDEX}])=2'
+                  name: 'PSU {#PSU_INDEX}: Power supply failure'
+                  opdata: 'Current state: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  tags:
+                    - tag: component
+                      value: power
+                    - tag: scope
+                      value: availability
+          master_item:
+            key: sensor.psu.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#PSU_INDEX}'
+                - 1.3.6.1.4.1.52642.9.189.5.1.1.1
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+      tags:
+        - tag: class
+          value: network-switch
+        - tag: vendor
+          value: FS
+      macros:
+        - macro: '{$CPU.UTIL.CRIT}'
+          value: '90'
+          description: 'CPU utilization critical threshold (%)'
+        - macro: '{$ICMP_LOSS_WARN}'
+          value: '20'
+          description: 'ICMP packet loss warning threshold (%)'
+        - macro: '{$ICMP_RESPONSE_TIME_WARN}'
+          value: '0.15'
+          description: 'ICMP response time warning threshold (s)'
+        - macro: '{$IF.ERRORS.WARN}'
+          value: '2'
+          description: 'Interface errors per interval warning threshold'
+        - macro: '{$IF.UTIL.MAX}'
+          value: '90'
+          description: 'Interface utilization warning threshold (%)'
+        - macro: '{$IFCONTROL}'
+          value: '1'
+          description: 'Link down trigger control (1=enabled, 0=disabled)'
+        - macro: '{$MEMORY.UTIL.MAX}'
+          value: '90'
+          description: 'Memory utilization warning threshold (%)'
+        - macro: '{$NET.IF.IFDESCR.MATCHES}'
+          value: '.*'
+          description: 'Regex for interface descriptions to include'
+        - macro: '{$NET.IF.IFDESCR.NOT_MATCHES}'
+          value: DOES_NOT_MATCH
+          description: 'Regex for interface descriptions to exclude'
+        - macro: '{$NET.IF.IFNAME.MATCHES}'
+          value: ^(eth|ge|te|xge|port|lag|vlan)
+          description: 'Regex for interface names to include in discovery'
+        - macro: '{$NET.IF.IFNAME.NOT_MATCHES}'
+          value: ^(Nu|Lo|Vl1$)
+          description: 'Regex for interface names to exclude from discovery'
+        - macro: '{$SNMP.TIMEOUT}'
+          value: 5m
+          description: 'SNMP unavailability timeout'
+        - macro: '{$TEMP.MAX.CRIT}'
+          value: '65'
+          description: 'Temperature critical threshold (°C)'
+        - macro: '{$TEMP.MAX.WARN}'
+          value: '55'
+          description: 'Temperature warning threshold (°C)'
+      valuemaps:
+        - uuid: a79fd7cace344d54b46f77af37a05df8
+          name: 'FS-MIB::switchFanStatus'
+          mappings:
+            - value: '1'
+              newvalue: ok
+            - value: '2'
+              newvalue: failure
+        - uuid: ae6376abec5e40a78ff70186117f1cc5
+          name: 'FS-MIB::switchOperState'
+          mappings:
+            - value: '1'
+              newvalue: other
+            - value: '2'
+              newvalue: unknown
+            - value: '3'
+              newvalue: ok
+            - value: '4'
+              newvalue: noncritical
+            - value: '5'
+              newvalue: critical
+            - value: '6'
+              newvalue: nonrecoverable
+        - uuid: 11938acccca944cda3a79120504f5ca6
+          name: 'FS::PSU status'
+          mappings:
+            - value: '1'
+              newvalue: ok
+            - value: '2'
+              newvalue: failure
+        - uuid: 95acda9a7b2647f79bfebb05ce3ebda4
+          name: 'IF-MIB::ifOperStatus'
+          mappings:
+            - value: '1'
+              newvalue: up
+            - value: '2'
+              newvalue: down
+            - value: '3'
+              newvalue: testing
+            - value: '4'
+              newvalue: unknown
+            - value: '5'
+              newvalue: dormant
+            - value: '6'
+              newvalue: notPresent
+            - value: '7'
+              newvalue: lowerLayerDown
+        - uuid: 7a502701436e44ee8a97b4392af09fba
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+        - uuid: b1beb9c7df274cd089599e1cdf72e93b
+          name: zabbix.host.available
+          mappings:
+            - value: '0'
+              newvalue: 'not available'
+            - value: '1'
+              newvalue: available
+            - value: '2'
+              newvalue: unknown
+  triggers:
+    - uuid: e251c11d4aed4f20848577fc83892866
+      expression: 'last(/FS Switch S3900 SNMP/system.hw.uptime[fsUptime.0])>0 and last(/FS Switch S3900 SNMP/system.hw.uptime[fsUptime.0])<600 or last(/FS Switch S3900 SNMP/system.hw.uptime[fsUptime.0])=0 and last(/FS Switch S3900 SNMP/system.net.uptime[sysUpTime.0])>0 and last(/FS Switch S3900 SNMP/system.net.uptime[sysUpTime.0])<600'
+      name: 'FS Switch: Device has been restarted'
+      event_name: 'FS Switch: Device has been restarted (uptime < 10m)'
+      priority: WARNING
+      manual_close: 'YES'
+      tags:
+        - tag: scope
+          value: notice
+  graphs:
+    - uuid: 97adee0f22c644c39501c0af7c2cff68
+      name: 'CPU utilization'
+      ymin_type_1: FIXED
+      ymax_type_1: FIXED
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 1A7C11
+          item:
+            host: 'FS Switch S3900 SNMP'
+            key: system.cpu.util
+        - sortorder: '1'
+          color: 2774A4
+          item:
+            host: 'FS Switch S3900 SNMP'
+            key: system.cpu.util.avg
+    - uuid: 06dfb6393c12447d81eb8935c0e9e678
+      name: 'Memory utilization'
+      ymin_type_1: FIXED
+      ymax_type_1: FIXED
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 199C0D
+          item:
+            host: 'FS Switch S3900 SNMP'
+            key: vm.memory.pfree

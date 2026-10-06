@@ -1,0 +1,972 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 5c2009a54b3844d8b896afcb916c3687
+      template: 'SMSEagle by HTTP'
+      name: 'SMSEagle by HTTP'
+      description: |
+        Monitoring SMSEagle SMS gateway devices via HTTP API v2.
+        Collects modem status, signal strength, SIM status, message counters,
+        firmware version, support status, HA failover state, service statuses
+        (MQTT, SNMP, SMPP, Email2SMS, Data connection), and temperature sensors.
+        Requires firmware 6.30+ for full functionality.
+
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        # ========== Messages ==========
+        - uuid: abf0c865b24e4c8ab512641ea368e1e8
+          name: 'Messages count - delivered'
+          type: DEPENDENT
+          key: messages.delivered
+          delay: '0'
+          history: 7d
+          units: '!messages'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.delivered
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: messages.full_info
+          tags:
+            - tag: Messages
+        - uuid: 7840d610a7d74a28b35569d9df34ec00
+          name: 'Messages count - error'
+          type: DEPENDENT
+          key: messages.error
+          delay: '0'
+          history: 7d
+          units: '!messages'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.error
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: messages.full_info
+          tags:
+            - tag: Messages
+        - uuid: 8b12ab1daf7d4acb982ccd6ccb365215
+          name: 'Messages full info'
+          type: HTTP_AGENT
+          key: messages.full_info
+          delay: 1m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          url: '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/messages/count/'
+          headers:
+            - name: access-token
+              value: '{$TOKEN.API.SMSEAGLE}'
+          tags:
+            - tag: RAW
+        - uuid: 2fa8b50e10ae4cb18f4ca18d089f8a27
+          name: 'Messages count - inbox'
+          type: DEPENDENT
+          key: messages.inbox
+          delay: '0'
+          history: 7d
+          units: '!messages'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.inbox
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: messages.full_info
+          tags:
+            - tag: Messages
+        - uuid: 631b6a32e63e417abdb171a89941b2d4
+          name: 'Messages count - outbox'
+          type: DEPENDENT
+          key: messages.outbox
+          delay: '0'
+          history: 7d
+          units: '!messages'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.outbox
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: messages.full_info
+          tags:
+            - tag: Messages
+        - uuid: 7225c30bd3f940e68235caffdfe99223
+          name: 'Messages count - sent'
+          type: DEPENDENT
+          key: messages.sent
+          delay: '0'
+          history: 7d
+          units: '!messages'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.sent
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: messages.full_info
+          tags:
+            - tag: Messages
+        # ========== Modem ==========
+        - uuid: 1a9ca91068794766a0f6b269c8f94463
+          name: 'Modem full info'
+          type: HTTP_AGENT
+          key: modem.full_info
+          delay: 1m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          url: '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/modem/full_info/'
+          headers:
+            - name: access-token
+              value: '{$TOKEN.API.SMSEAGLE}'
+          tags:
+            - tag: RAW
+        - uuid: f6af6cb04f76401eb6f1094d911014eb
+          name: 'Modem count'
+          type: DEPENDENT
+          key: modem.count
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return JSON.parse(value).length;'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: modem.full_info
+          tags:
+            - tag: Modem
+        # ========== Device version ==========
+        - uuid: 1b497c32f8d74cd2a547e7d551d68655
+          name: 'Device version info'
+          type: HTTP_AGENT
+          key: device.version
+          delay: 1h
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          url: '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/device/version'
+          headers:
+            - name: access-token
+              value: '{$TOKEN.API.SMSEAGLE}'
+          tags:
+            - tag: RAW
+        - uuid: dc45b22d8f97499f8be4f5f5930a3954
+          name: 'Firmware: Current version'
+          type: DEPENDENT
+          key: device.firmware.version
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.current_version
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: device.version
+          tags:
+            - tag: Firmware
+        - uuid: 8d30899fd3554b729012707f958dd25e
+          name: 'Firmware: Update available'
+          type: DEPENDENT
+          key: device.firmware.update_available
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle firmware update'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.update_available
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.version
+          tags:
+            - tag: Firmware
+        # ========== Device support ==========
+        - uuid: 39857b776ba9459ba408ca3828ac5800
+          name: 'Device support info'
+          type: HTTP_AGENT
+          key: device.support
+          delay: 12h
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          url: '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/device/support'
+          headers:
+            - name: access-token
+              value: '{$TOKEN.API.SMSEAGLE}'
+          tags:
+            - tag: RAW
+        - uuid: 297c7bb3b408445f881480160504e220
+          name: 'Support: Expiration date'
+          type: DEPENDENT
+          key: device.support.date
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.date
+              error_handler: CUSTOM_VALUE
+              error_handler_params: unknown
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: device.support
+          tags:
+            - tag: Support
+        - uuid: 07f3f6244ce24430bd2d6ef2744fbdab
+          name: 'Support: Active'
+          type: DEPENDENT
+          key: device.support.active
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle support status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.active
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: device.support
+          tags:
+            - tag: Support
+        # ========== HA Failover ==========
+        - uuid: c881606dd99f4c7b992da6feccd5f9ed
+          name: 'Device HA failover status'
+          type: HTTP_AGENT
+          key: device.ha_failover
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          url: '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/device/ha_failover/status'
+          headers:
+            - name: access-token
+              value: '{$TOKEN.API.SMSEAGLE}'
+          tags:
+            - tag: RAW
+        - uuid: b84eada8b3204acda2e65bc9f7e1149a
+          name: 'HA: Failover status'
+          type: DEPENDENT
+          key: device.ha.status
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle HA status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.status
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var map = {"disabled": 0, "master": 1, "backup": 2, "fault": 3};
+                  return map[value] !== undefined ? map[value] : -1;
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.ha_failover
+          tags:
+            - tag: HA
+        # ========== Services (Script) ==========
+        - uuid: e8918a802d8a41eabc2e9b42d0978876
+          name: 'Services full info'
+          type: SCRIPT
+          key: device.services
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          timeout: 30s
+          params: |
+            var baseUrl = '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/device';
+            var token = '{$TOKEN.API.SMSEAGLE}';
+            var services = ['mqtt', 'snmp', 'data_conn', 'email2sms', 'email2sms_poller', 'smpp'];
+            var result = {};
+            for (var i = 0; i < services.length; i++) {
+                try {
+                    var req = new HttpRequest();
+                    req.addHeader('access-token: ' + token);
+                    var resp = req.get(baseUrl + '/' + services[i] + '/status');
+                    result[services[i]] = JSON.parse(resp);
+                } catch (e) {
+                    result[services[i]] = {"enabled": null, "error": e.message};
+                }
+            }
+            return JSON.stringify(result);
+          tags:
+            - tag: RAW
+        - uuid: 42c4b994ee0e482ea2770537c57c652b
+          name: 'Service: MQTT'
+          type: DEPENDENT
+          key: service.mqtt.enabled
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle service status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.mqtt.enabled
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.services
+          tags:
+            - tag: Service
+              value: MQTT
+        - uuid: afab7e3ee4ba4f558410f311baa8e9b4
+          name: 'Service: SNMP'
+          type: DEPENDENT
+          key: service.snmp.enabled
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle service status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.snmp.enabled
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.services
+          tags:
+            - tag: Service
+              value: SNMP
+        - uuid: fda098d676714acaaec8294e780554cc
+          name: 'Service: Data connection'
+          type: DEPENDENT
+          key: service.data_conn.enabled
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle service status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data_conn.enabled
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.services
+          tags:
+            - tag: Service
+              value: 'Data connection'
+        - uuid: ed8707ac80a448e8bf9b16ba72a4b949
+          name: 'Service: Email2SMS'
+          type: DEPENDENT
+          key: service.email2sms.enabled
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle service status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.email2sms.enabled
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.services
+          tags:
+            - tag: Service
+              value: Email2SMS
+        - uuid: fcd874010d1d4431a9d790cbe40affdb
+          name: 'Service: Email2SMS Poller'
+          type: DEPENDENT
+          key: service.email2sms_poller.enabled
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle service status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.email2sms_poller.enabled
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.services
+          tags:
+            - tag: Service
+              value: 'Email2SMS Poller'
+        - uuid: eccff2b40a0f4b07847b9058529217e4
+          name: 'Service: SMPP'
+          type: DEPENDENT
+          key: service.smpp.enabled
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'SMSEagle service status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.smpp.enabled
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: device.services
+          tags:
+            - tag: Service
+              value: SMPP
+      discovery_rules:
+        # ========== Modem discovery ==========
+        - uuid: bb1bc0b9f04c463996e8ddbf00bc010b
+          name: 'Modem discovery'
+          type: DEPENDENT
+          key: modem.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: 3e953fbd690e44958cf83e4835f44a7c
+              name: 'Modem #{#MODEM.NUMBER} imei'
+              type: DEPENDENT
+              key: 'modem.imei[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].imei.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+            - uuid: 258edf0426ef4a5a8a2d55585ba65da7
+              name: 'Modem #{#MODEM.NUMBER} imsi'
+              type: DEPENDENT
+              key: 'modem.imsi[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].imsi.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+            - uuid: f5fee65510b140eebd66d3e05718af59
+              name: 'Modem #{#MODEM.NUMBER} network name'
+              type: DEPENDENT
+              key: 'modem.net_name[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].net_name.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+            - uuid: 0284510fbfad4a4395ea4ff57912d333
+              name: 'Modem #{#MODEM.NUMBER} number'
+              type: DEPENDENT
+              key: 'modem.number[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              value_type: CHAR
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].number.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+            - uuid: 268747619a3649178f333b9d4750c0d6
+              name: 'Modem #{#MODEM.NUMBER} signal strength'
+              type: DEPENDENT
+              key: 'modem.signal_strength[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              units: '%'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].signal_strength.first()'
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+              trigger_prototypes:
+                - uuid: 8b537758b83a4944a2381dde8f7acbcb
+                  expression: 'last(/SMSEagle by HTTP/modem.signal_strength[{#MODEM.NUMBER}])<{$SMSE.MIN.SIGNAL.STRENGTH}'
+                  name: 'Modem #{#MODEM.NUMBER} signal strength low'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: SMSE
+                      value: 'Signal strength'
+            - uuid: 07bd2bf7f0024ebab4953c0e6dbd1001
+              name: 'Modem #{#MODEM.NUMBER} sim network registration status'
+              type: DEPENDENT
+              key: 'modem.sim_network_registration_status[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'SMSEagle SIM network registration'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].sim_network_registration_status.first()'
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var map = {"Not Registered": 0, "Registered Home": 1, "Searching": 2, "Registration Denied": 3, "Unknown": 4, "Registered Roaming": 5};
+                      return map[value] !== undefined ? map[value] : 4;
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+              trigger_prototypes:
+                - uuid: c9ca524d64cf4f8a940bc2a4936e1767
+                  expression: 'last(/SMSEagle by HTTP/modem.sim_network_registration_status[{#MODEM.NUMBER}])<>1 and last(/SMSEagle by HTTP/modem.sim_network_registration_status[{#MODEM.NUMBER}])<>5'
+                  name: 'Modem #{#MODEM.NUMBER} SIM not registered'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: SMSE
+                      value: 'SIM registration'
+            - uuid: 22ccd566312843ada304ba5d883d7991
+              name: 'Modem #{#MODEM.NUMBER} sim status'
+              type: DEPENDENT
+              key: 'modem.sim_status[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'SMSEagle SIM status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].sim_status.first()'
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var map = {"Not Inserted": 0, "Operational": 1, "PIN Required": 2, "PUK Required": 3, "Error": 4};
+                      return map[value] !== undefined ? map[value] : 4;
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+              trigger_prototypes:
+                - uuid: 120f7a1e605e460699e4f1c67b1b50ed
+                  expression: 'last(/SMSEagle by HTTP/modem.sim_status[{#MODEM.NUMBER}])<>1'
+                  name: 'Modem #{#MODEM.NUMBER} sim status'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: SMSE
+                      value: 'SIM status'
+            - uuid: 40cd488d0b754913b575e9f074ed4b66
+              name: 'Modem #{#MODEM.NUMBER} status'
+              type: DEPENDENT
+              key: 'modem.status[{#MODEM.NUMBER}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'SMSEagle service status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.modem_no == ''{#MODEM.NUMBER}'')].modem_enabled.first()'
+                - type: BOOL_TO_DECIMAL
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: modem.full_info
+              tags:
+                - tag: Modem
+                  value: '{#MODEM.NUMBER}'
+              trigger_prototypes:
+                - uuid: 374ae9d8b4ff432b87e9373b116444a2
+                  expression: 'last(/SMSEagle by HTTP/modem.status[{#MODEM.NUMBER}])<>1'
+                  name: 'Modem #{#MODEM.NUMBER} not functional'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: HIGH
+                  manual_close: 'YES'
+          master_item:
+            key: modem.full_info
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Zabbix LLD JavaScript preprocessing step
+                  var data = JSON.parse(value);
+                  var result = [];
+                  for (var i = 0; i < data.length; i++) {
+                      result.push({
+                          "{#MODEM.NUMBER}": data[i].modem_no
+                      });
+                  }
+                  return JSON.stringify(result);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        # ========== Temperature sensor discovery ==========
+        - uuid: 2543f2bd99bf4a028974fb1ab495f7d9
+          name: 'Temperature sensor discovery'
+          type: SCRIPT
+          key: device.temp.discovery
+          delay: 1h
+          timeout: 30s
+          params: |
+            var baseUrl = '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/device/temperature_sensor';
+            var token = '{$TOKEN.API.SMSEAGLE}';
+            var result = [];
+            for (var i = 1; i <= 4; i++) {
+                try {
+                    var req = new HttpRequest();
+                    req.addHeader('access-token: ' + token);
+                    var resp = req.get(baseUrl + '/' + i + '/status');
+                    var data = JSON.parse(resp);
+                    if (data.enabled !== undefined) {
+                        result.push({
+                            "{#SENSOR.ID}": String(i),
+                            "{#SENSOR.ENABLED}": data.enabled ? "1" : "0",
+                            "{#SENSOR.STATUS}": data.status || "unknown"
+                        });
+                    }
+                } catch (e) {
+                    // Sensor does not exist, skip
+                }
+            }
+            return JSON.stringify(result);
+          item_prototypes:
+            - uuid: 3863a9f651304e41a083440f47a71719
+              name: 'Temperature sensor #{#SENSOR.ID}: Raw data'
+              type: HTTP_AGENT
+              key: 'device.temp.read[{#SENSOR.ID}]'
+              delay: 5m
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              url: '{$SCHEMA.API.SMSEAGLE}://{$HOST.API.SMSEAGLE}/api/v2/device/temperature_sensor/{#SENSOR.ID}/read?scale=celsius'
+              headers:
+                - name: access-token
+                  value: '{$TOKEN.API.SMSEAGLE}'
+              tags:
+                - tag: RAW
+            - uuid: 00c3ebe333294255ba5d581fc70a9a97
+              name: 'Temperature sensor #{#SENSOR.ID}: Temperature'
+              type: DEPENDENT
+              key: 'device.temp.temperature[{#SENSOR.ID}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: °C
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.temperature
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 15m
+              master_item:
+                key: 'device.temp.read[{#SENSOR.ID}]'
+              tags:
+                - tag: Temperature
+                  value: '{#SENSOR.ID}'
+            - uuid: a406609e54da4b96959a24f49112198b
+              name: 'Temperature sensor #{#SENSOR.ID}: Humidity'
+              type: DEPENDENT
+              key: 'device.temp.humidity[{#SENSOR.ID}]'
+              delay: '0'
+              history: 7d
+              value_type: FLOAT
+              units: '%'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.humidity
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 15m
+              master_item:
+                key: 'device.temp.read[{#SENSOR.ID}]'
+              tags:
+                - tag: Temperature
+                  value: '{#SENSOR.ID}'
+          trigger_prototypes:
+            - uuid: 5558cf11a8e440f3b04d94bcd43cc954
+              expression: 'last(/SMSEagle by HTTP/device.temp.temperature[{#SENSOR.ID}])>{$SMSEAGLE.TEMP.HIGH}'
+              name: 'Temperature sensor #{#SENSOR.ID}: Temperature too high'
+              opdata: '{ITEM.LASTVALUE}'
+              priority: AVERAGE
+              manual_close: 'YES'
+              tags:
+                - tag: SMSE
+                  value: Temperature
+      macros:
+        - macro: '{$HOST.API.SMSEAGLE}'
+          value: 192.168.220.33
+          description: 'IP address or hostname of the SMSEagle device API'
+        - macro: '{$SCHEMA.API.SMSEAGLE}'
+          value: https
+          description: 'API connection schema: http or https'
+        - macro: '{$SMSE.MIN.SIGNAL.STRENGTH}'
+          value: '50'
+          description: 'Minimum acceptable signal strength threshold (0-100)'
+        - macro: '{$SMSEAGLE.ERROR.THRESHOLD}'
+          value: '5'
+          description: 'Minimum message error count increase to trigger alert'
+        - macro: '{$SMSEAGLE.NODATA.TIMEOUT}'
+          value: 75m
+          description: 'No data timeout (must be > DISCARD_UNCHANGED_HEARTBEAT 1h)'
+        - macro: '{$SMSEAGLE.TEMP.HIGH}'
+          value: '60'
+          description: 'High temperature threshold for sensor alerts (Celsius)'
+        - macro: '{$TOKEN.API.SMSEAGLE}'
+          type: SECRET_TEXT
+          description: 'SMSEagle API access token'
+      valuemaps:
+        - uuid: 1032031816014ae68a9a98e43f246039
+          name: 'SMSEagle service status'
+          mappings:
+            - value: '0'
+              newvalue: Disabled
+            - value: '1'
+              newvalue: Enabled
+        - uuid: 9c40b680872c49bf838187b102da1e48
+          name: 'SMSEagle SIM network registration'
+          mappings:
+            - value: '0'
+              newvalue: 'Not Registered'
+            - value: '1'
+              newvalue: 'Registered Home'
+            - value: '2'
+              newvalue: Searching
+            - value: '3'
+              newvalue: 'Registration Denied'
+            - value: '4'
+              newvalue: Unknown
+            - value: '5'
+              newvalue: 'Registered Roaming'
+        - uuid: f916558195fe451fa38614cd9159d1b0
+          name: 'SMSEagle SIM status'
+          mappings:
+            - value: '0'
+              newvalue: 'Not Inserted'
+            - value: '1'
+              newvalue: Operational
+            - value: '2'
+              newvalue: 'PIN Required'
+            - value: '3'
+              newvalue: 'PUK Required'
+            - value: '4'
+              newvalue: Error
+        - uuid: 4d36c18f14af41e3bf07d4e9d1a0b7c2
+          name: 'SMSEagle HA status'
+          mappings:
+            - value: '0'
+              newvalue: Disabled
+            - value: '1'
+              newvalue: Master
+            - value: '2'
+              newvalue: Backup
+            - value: '3'
+              newvalue: Fault
+        - uuid: af6d6b52536e4e0cb0ac0e78382d1e63
+          name: 'SMSEagle firmware update'
+          mappings:
+            - value: '0'
+              newvalue: 'Up to date'
+            - value: '1'
+              newvalue: 'Update available'
+        - uuid: 772d278e58394ecc948bc93f911300a4
+          name: 'SMSEagle support status'
+          mappings:
+            - value: '0'
+              newvalue: Expired
+            - value: '1'
+              newvalue: Active
+  triggers:
+    - uuid: 8456f0901c7542e6a3631696ef5e16f9
+      expression: 'nodata(/SMSEagle by HTTP/messages.delivered,{$SMSEAGLE.NODATA.TIMEOUT})=1'
+      name: 'SMSEagle: No data from messages API'
+      priority: HIGH
+      manual_close: 'YES'
+      tags:
+        - tag: SMSE
+          value: Availability
+    - uuid: 60c1082813e041c989effbe0269e7022
+      expression: 'nodata(/SMSEagle by HTTP/modem.count,{$SMSEAGLE.NODATA.TIMEOUT})=1'
+      name: 'SMSEagle: No data from modem API'
+      priority: HIGH
+      manual_close: 'YES'
+      tags:
+        - tag: SMSE
+          value: Availability
+    - uuid: 8e67948b325e406881b3294894f79bbf
+      expression: 'change(/SMSEagle by HTTP/messages.error)>={$SMSEAGLE.ERROR.THRESHOLD}'
+      name: 'SMSEagle: Message errors increasing'
+      opdata: '{ITEM.LASTVALUE}'
+      priority: WARNING
+      manual_close: 'YES'
+      tags:
+        - tag: SMSE
+          value: Messages
+    - uuid: 07515c5c71054ef49bfd9a91e04b6958
+      expression: 'last(/SMSEagle by HTTP/device.firmware.update_available)=1'
+      name: 'SMSEagle: Firmware update available'
+      opdata: 'Current: {ITEM.LASTVALUE1}'
+      priority: INFO
+      manual_close: 'YES'
+      tags:
+        - tag: SMSE
+          value: Firmware
+    - uuid: 5e8587b9a18441a887f4cb7bde729960
+      expression: 'last(/SMSEagle by HTTP/device.support.active)=0'
+      name: 'SMSEagle: Support package expired'
+      opdata: 'Expired: {ITEM.LASTVALUE1}'
+      priority: HIGH
+      manual_close: 'YES'
+      tags:
+        - tag: SMSE
+          value: Support
+    - uuid: 6ae9565bf89040f99252ed40aab1ecf5
+      expression: 'last(/SMSEagle by HTTP/device.ha.status)=3'
+      name: 'SMSEagle: HA failover in fault state'
+      opdata: '{ITEM.LASTVALUE}'
+      priority: HIGH
+      manual_close: 'YES'
+      tags:
+        - tag: SMSE
+          value: HA

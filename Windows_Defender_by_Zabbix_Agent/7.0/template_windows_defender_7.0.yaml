@@ -1,0 +1,937 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: db4606362c6848d895ff5b745f57583e
+      template: 'Windows Defender and Events by Zabbix agent'
+      name: 'Windows Defender and Events by Zabbix agent'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-3
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 6c8cc245baf94a5b8c0d3930bd22eb35
+          name: 'Anti Spyware Protection Enabled'
+          type: DEPENDENT
+          key: defender.AntispywareEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.AntispywareEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 672dd330eefa4710a47d9b5eea350566
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.AntispywareEnabled)<>1'
+              name: 'Anti Spyware Disabled on {HOST.HOST}'
+              priority: WARNING
+        - uuid: d85d908e177445e98261a6d20b20b2bc
+          name: 'AntiSpyware Signature age in days'
+          type: DEPENDENT
+          key: defender.AntispywareSignatureAge
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: '!days'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.AntispywareSignatureAge
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 0f526b414834405e873de2bc06836302
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.AntispywareSignatureAge)>{$SIGNATURE.AGE.LIMIT}'
+              name: 'Anti Spyware Signature was not updated for more than {$SIGNATURE.AGE.LIMIT} days'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: 350a64a1df8045af8baece47ab4e5b04
+          name: 'AntiSpyware Signature Last updated'
+          type: DEPENDENT
+          key: defender.AntispywareSignatureLastUpdated
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: unixtime
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.AntispywareSignatureLastUpdated
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var year    = value.substring(0, 4);   // 2025
+                      var month   = value.substring(4, 6);   // 12
+                      var day     = value.substring(6, 8);   // 04
+                      var hour    = value.substring(8, 10);  // 04
+                      var minute  = value.substring(10, 12); // 02
+                      var second  = value.substring(12, 14); // 21
+                  
+                      // 2. Sestavení ISO 8601 řetězce
+                      // ISO 8601 formát: YYYY-MM-DDTHH:MM:SS.msZ
+                      // Použijeme Z na konci, protože vstupní řetězec má "+000" (UTC/Zulu time).
+                      var isoString = year + '-' + month + '-' + day + 'T' + 
+                                      hour + ':' + minute + ':' + second + 'Z';
+                      
+                      // 3. Parsování a získání milisekund od Epochy
+                      // Duktape Date.parse() by měl tento standardní formát zvládnout.
+                      var milliseconds = Date.parse(isoString);
+                  
+                      // Kontrola, zda parsování proběhlo úspěšně
+                      if (isNaN(milliseconds)) {
+                          //print("ERROR: Nepodařilo se parsovat datum: " + isoString);
+                          return NaN;
+                      }
+                  
+                      // 4. Převod na sekundy a zaokrouhlení
+                      return Math.floor(milliseconds / 1000);
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 8eb8e057e92748998d334525901a6e19
+          name: 'Anti Virus Enabled'
+          type: DEPENDENT
+          key: defender.AntivirusEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.AntivirusEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 65cba6099e374533aac38cf42d584540
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.AntivirusEnabled)<>1'
+              name: 'Anti Virus Disabled on {HOST.HOST}'
+              priority: WARNING
+        - uuid: f6716d97ab9745c58f09ae6ec6bb5437
+          name: 'AntiVirus Signature Age'
+          type: DEPENDENT
+          key: defender.AntivirusSignatureAge
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: '!days'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.AntivirusSignatureAge
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 7088f724d8d74f6ea32fef658af84d67
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.AntivirusSignatureAge)>{$SIGNATURE.AGE.LIMIT}'
+              name: 'Anti Virus Signature was not updated for more than {$SIGNATURE.AGE.LIMIT} days'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: 9a217e0f22054314aa0dc438f0897a60
+          name: 'AntiVirus Signature Last updated'
+          type: DEPENDENT
+          key: defender.AntivirusSignatureLastUpdated
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: unixtime
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.AntivirusSignatureLastUpdated
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var year    = value.substring(0, 4);   // 2025
+                      var month   = value.substring(4, 6);   // 12
+                      var day     = value.substring(6, 8);   // 04
+                      var hour    = value.substring(8, 10);  // 04
+                      var minute  = value.substring(10, 12); // 02
+                      var second  = value.substring(12, 14); // 21
+                  
+                      // 2. Sestavení ISO 8601 řetězce
+                      // ISO 8601 formát: YYYY-MM-DDTHH:MM:SS.msZ
+                      // Použijeme Z na konci, protože vstupní řetězec má "+000" (UTC/Zulu time).
+                      var isoString = year + '-' + month + '-' + day + 'T' + 
+                                      hour + ':' + minute + ':' + second + 'Z';
+                      
+                      // 3. Parsování a získání milisekund od Epochy
+                      // Duktape Date.parse() by měl tento standardní formát zvládnout.
+                      var milliseconds = Date.parse(isoString);
+                  
+                      // Kontrola, zda parsování proběhlo úspěšně
+                      if (isNaN(milliseconds)) {
+                          //print("ERROR: Nepodařilo se parsovat datum: " + isoString);
+                          return NaN;
+                      }
+                  
+                      // 4. Převod na sekundy a zaokrouhlení
+                      return Math.floor(milliseconds / 1000);
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 7b5a744643944980852d4eb449e292c0
+          name: 'Behavior Monitor Enabled'
+          type: DEPENDENT
+          key: defender.BehaviorMonitorEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.BehaviorMonitorEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: b3913e3f72ca460393adab8ff19383ac
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.BehaviorMonitorEnabled)=0'
+              name: 'Behavior Monitor Disabled on {HOST.HOST}'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: 518b38c02a504d558a784ee4a9c7be9d
+          name: 'Full Scan Age'
+          type: DEPENDENT
+          key: defender.FullScanAge
+          delay: '0'
+          history: 90d
+          value_type: FLOAT
+          trends: '0'
+          units: '!days'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.FullScanAge
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 0a4acfe4bc3a45eaa5a3a8b294efc435
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.FullScanAge)>{$FULL.SCAN.AGE.LIMIT} and last(/Windows Defender and Events by Zabbix agent/defender.FullScanAge)<4294967295'
+              name: 'Full Scan was not performed for more than {$FULL.SCAN.AGE.LIMIT} days on {HOST.HOST}'
+              priority: AVERAGE
+        - uuid: 844b60a4776b47b2b6a5b0d684fba697
+          name: 'Ioav Protection Enabled'
+          type: DEPENDENT
+          key: defender.IoavProtectionEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.IoavProtectionEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 423861c918bd4b509db756e25e6871c4
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.IoavProtectionEnabled)=0'
+              name: 'Ioav Protection Disabled on {HOST.HOST}'
+              priority: WARNING
+        - uuid: 64bb7fe8c132474684040db909119a50
+          name: 'NIS Protection Enabled'
+          type: DEPENDENT
+          key: defender.NISEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.NISEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 4f0bce1dd4b54ef7a3f3d83f0b24705b
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.NISEnabled)=0'
+              name: 'NIS Protection Disabled on {HOST.HOST}'
+              priority: WARNING
+              manual_close: 'YES'
+        - uuid: b70c0b11ae1a4f6b91d2fe97f4f28bcd
+          name: 'NIS Signature age in days'
+          type: DEPENDENT
+          key: defender.NISSignatureAge
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: '!days'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.NISSignatureAge
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 3f51068878b741aca59ef971e044ae65
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.NISSignatureAge)>{$SIGNATURE.AGE.LIMIT}'
+              name: 'NIS Signature was not updated for more than {$SIGNATURE.AGE.LIMIT} days'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: eb649d30474042dba33a1877b18b9907
+          name: 'NIS Signature Last updated'
+          type: DEPENDENT
+          key: defender.NISSignatureLastUpdated
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: unixtime
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.NISSignatureLastUpdated
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var year    = value.substring(0, 4);   // 2025
+                      var month   = value.substring(4, 6);   // 12
+                      var day     = value.substring(6, 8);   // 04
+                      var hour    = value.substring(8, 10);  // 04
+                      var minute  = value.substring(10, 12); // 02
+                      var second  = value.substring(12, 14); // 21
+                  
+                      // 2. Sestavení ISO 8601 řetězce
+                      // ISO 8601 formát: YYYY-MM-DDTHH:MM:SS.msZ
+                      // Použijeme Z na konci, protože vstupní řetězec má "+000" (UTC/Zulu time).
+                      var isoString = year + '-' + month + '-' + day + 'T' + 
+                                      hour + ':' + minute + ':' + second + 'Z';
+                      
+                      // 3. Parsování a získání milisekund od Epochy
+                      // Duktape Date.parse() by měl tento standardní formát zvládnout.
+                      var milliseconds = Date.parse(isoString);
+                  
+                      // Kontrola, zda parsování proběhlo úspěšně
+                      if (isNaN(milliseconds)) {
+                          //print("ERROR: Nepodařilo se parsovat datum: " + isoString);
+                          return NaN;
+                      }
+                  
+                      // 4. Převod na sekundy a zaokrouhlení
+                      return Math.floor(milliseconds / 1000);
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: a63b30376bb2469c9b927273310cc85c
+          name: 'OnAccess Protection Enabled'
+          type: DEPENDENT
+          key: defender.OnAccessProtectionEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.OnAccessProtectionEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 3fea2cd79f914e329d6d1924be355e17
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.OnAccessProtectionEnabled)=0'
+              name: 'OnAccess Protection Disabled on {HOST.HOST}'
+              priority: WARNING
+        - uuid: 93f8595fe8644164935c2366fccffbf3
+          name: 'Quick Scan Age'
+          type: DEPENDENT
+          key: defender.QuickScanAge
+          delay: '0'
+          history: 90d
+          trends: '0'
+          units: days
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.QuickScanAge
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 13b05312eeb14e30ae0c5782c78e5e03
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.QuickScanAge)>{$QUICK.SCAN.AGE.LIMIT} and last(/Windows Defender and Events by Zabbix agent/defender.QuickScanAge)<4294967295'
+              name: 'Quick Scan was not performed for more than {$QUICK.SCAN.AGE.LIMIT} days on {HOST.HOST}'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: b73b108627884edd94f10ee3b019faa2
+          name: 'Real Time Protection Enabled'
+          type: DEPENDENT
+          key: defender.RealTimeProtectionEnabled
+          delay: '0'
+          history: 90d
+          trends: '0'
+          valuemap:
+            name: TrueFalse
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.RealTimeProtectionEnabled
+            - type: STR_REPLACE
+              parameters:
+                - 'True'
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - 'False'
+                - '0'
+            - type: IN_RANGE
+              parameters:
+                - '0'
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          master_item:
+            key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: b8cd0d90ba9e402ea8a0f979ce9c57fb
+              expression: 'last(/Windows Defender and Events by Zabbix agent/defender.RealTimeProtectionEnabled)=0'
+              name: 'Real Time Protection Disabled on {HOST.HOST}'
+              priority: WARNING
+        - uuid: f9b7143c98b7401a85805b1256350506
+          name: 'Windows defender scan started'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1000,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 3a03c616c7b64d14b29f7d434b7dd82a
+          name: 'Windows defender scan completed'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1001,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 1174132770bd4901bd08a39260a136d2
+          name: 'Windows defender scan cancelled'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1002,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 0033cb87344c4e5ab7771ff778b3249a
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1002,,skip],24h)=0'
+              name: 'Windows Defender scan cancelled by user'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: b87c3319eacf42b3b5f416c44099f6cd
+          name: 'Windows defender scan failed'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1005,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 222e437eb4434ff1a3f1c9a33ec2e2c9
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1005,,skip],24h)=0'
+              name: 'Windows Antimalware scan failed'
+              priority: AVERAGE
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: ab0120e9028042d9bfb9057207d6c503
+          name: 'Windows defender malware detected'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1006|1116,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: d397e1c1c2dd4d61b6d6a06d1dd87b9c
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1006|1116,,skip],1h)=0'
+              name: 'Windows Defender malware detected'
+              priority: WARNING
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: 816a2d5cc8e143e4b81d3aaf471eb5f0
+          name: 'Windows defender malware action taken'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1007|1117,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 3c5697d150c74a92ab2deb4a98563b53
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1007|1117,,skip],1h)=0'
+              name: 'Windows Defender malware action taken'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: 5dabdae820774c028bc6d630a66c9092
+          name: 'Windows defender malware action failed'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1008|1118,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 269a1430638f467b940db24cab37bc9e
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1008|1118,,skip],24h)=0'
+              name: 'Windows Defender malware action failed'
+              priority: AVERAGE
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: 15adf5f874194ceabff49698f0663e5f
+          name: 'Windows defender history delete'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1013,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 64c450b4ed04454eac2be7237daad979
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1013,,skip],24h)=0'
+              name: 'Windows Antimalware history deleted'
+              status: DISABLED
+              priority: WARNING
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: 32696c456c824cb091fcfa813137e554
+          name: 'Windows defender suspicious behavior detected'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1015,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 1c877628526b4cc194b9850f4facfd5b
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1015,,skip],24h)=0'
+              name: 'Windows Defender suspicious behaviour detected'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: b9726a5ec94e4187992a8cd7bb400c60
+          name: 'Windows defender malware action critically failed'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1119,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 2ccb8190ff704f79a0b483ea767acd9d
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1119,,skip],24h)=0'
+              name: 'Windows Defender malware action critically failed'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: c60d445d381348e4b8d6bb54f2b762a7
+          name: 'Windows defender healthy'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1150,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 703928d07f3944bd8a9a779e025e5eb1
+          name: 'Windows defender signature update failed'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},2001,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 9b48f057f6f644efa6072a49a41fa3ac
+          name: 'Windows defender platform almost out of date'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},2007,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 85178ae0d98c4616a1fb5201dc8c4267
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},2007,,skip],24h)=0'
+              name: 'Windows Defender platform almost out of date'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: 275933f70b3b4a9da79a4b721bcec056
+          name: 'Windows defender RTP failure'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},3002,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: e15e35adb1cd44729d6d56a52a415fc8
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},3002,,skip],24h)=0'
+              name: 'Windows Defender RTP failure'
+              priority: AVERAGE
+              manual_close: 'YES'
+              dependencies:
+                - name: 'Windows Defender engine failure'
+                  expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5008,,skip],24h)=0'
+        - uuid: abb7e98c70c046b1a56a84ddc0a0d647
+          name: 'Windows defender RTP disabled'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5001,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 2950902d75514b7faa6d09f027f3ea84
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5001,,skip],24h)=0'
+              name: 'Windows Antimalware RTP disabled'
+              priority: WARNING
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: 7f4cbbba35b747a880f7e2f7aa8f6752
+          name: 'Windows defender engine failure'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5008,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 3b9e5e9743394c8ea93bfcbb5ea5435a
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5008,,skip],24h)=0'
+              name: 'Windows Defender engine failure'
+              priority: AVERAGE
+              manual_close: 'YES'
+        - uuid: cae4ea756ed24fa1828754bfe60a4a6c
+          name: 'Windows defender antispyware disabled'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5010,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: e6eacf138e954fdeb687064641386e3d
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5010,,skip],24h)=0'
+              name: 'Windows Antimalware antispyware disabled'
+              priority: WARNING
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: bc87e51e020a40d0820573a63a180b1e
+          name: 'Windows defender antivirus disabled'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5012,,skip]'
+          delay: '30'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: dab2ed2fac454ef59c30902c833111b0
+              expression: 'nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},5012,,skip],24h)=0'
+              name: 'Windows Antimalware antivirus disabled'
+              priority: WARNING
+              manual_close: 'YES'
+              tags:
+                - tag: ISAM
+                  value: SCEP
+        - uuid: 4f33d4e64b2e4047822ad313960f79b7
+          name: 'Windows antimalware service state'
+          key: 'service.info[MsMpSvc]'
+          delay: 120s
+          history: 90d
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 612310556eaf433aa448d9024fffcc9a
+          name: 'Windows defender service state'
+          key: 'service.info[WinDefend]'
+          delay: 120s
+          history: 90d
+          valuemap:
+            name: 'Windows service state'
+          tags:
+            - tag: component
+              value: defender
+        - uuid: 6212d958a4a84dc28b9289bac801a5d4
+          name: 'Defender MSFT_MpComputerStatus RAW'
+          key: 'wmi.getall["root\microsoft\windows\defender","select * from MSFT_MpComputerStatus"]'
+          delay: 1h
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: TRIM
+              parameters:
+                - '[]'
+          tags:
+            - tag: component
+              value: defender
+            - tag: raw
+        - uuid: f9f4b02e716d4b5a8d16a0f8bafb8cd4
+          name: 'Current computer state'
+          key: 'wmi.get["root\microsoft\windows\defender","select ComputerState  from MSFT_MpComputerStatus"]'
+          delay: 10m
+          history: 90d
+          tags:
+            - tag: component
+              value: defender
+          triggers:
+            - uuid: 938708d96a4441b5b23639b36aeea14b
+              expression: 'last(/Windows Defender and Events by Zabbix agent/wmi.get["root\microsoft\windows\defender","select ComputerState  from MSFT_MpComputerStatus"])=16'
+              name: 'Windows Defender has failed critically on {HOST.HOST}'
+              priority: HIGH
+      macros:
+        - macro: '{$AV_EVENTLOG}'
+          value: 'Microsoft-Windows-Windows Defender/Operational'
+        - macro: '{$AV_SOURCE}'
+        - macro: '{$FULL.SCAN.AGE.LIMIT}'
+          value: '5'
+        - macro: '{$QUICK.SCAN.AGE.LIMIT}'
+          value: '3'
+        - macro: '{$SIGNATURE.AGE.LIMIT}'
+          value: '90'
+      valuemaps:
+        - uuid: 75735fe151c7476f81d42a169239df99
+          name: TrueFalse
+          mappings:
+            - value: '1'
+              newvalue: 'True'
+            - value: '0'
+              newvalue: 'False'
+        - uuid: 9ed1261086324603b87ac7c57cd04642
+          name: 'Windows service state'
+          mappings:
+            - value: '0'
+              newvalue: Running
+            - value: '1'
+              newvalue: Paused
+            - value: '2'
+              newvalue: 'Start pending'
+            - value: '3'
+              newvalue: 'Pause pending'
+            - value: '4'
+              newvalue: 'Continue pending'
+            - value: '5'
+              newvalue: 'Stop pending'
+            - value: '6'
+              newvalue: Stopped
+            - value: '7'
+              newvalue: Unknown
+            - value: '255'
+              newvalue: 'No such service'
+  triggers:
+    - uuid: 6d17fb497d8541baa5176a49805c0127
+      expression: 'last(/Windows Defender and Events by Zabbix agent/service.info[MsMpSvc])<>0 and last(/Windows Defender and Events by Zabbix agent/service.info[WinDefend])<>0'
+      name: 'No malware scan service running'
+      priority: AVERAGE
+      manual_close: 'YES'
+    - uuid: 4adc0da11668411a8e723088a71549d1
+      expression: 'last(/Windows Defender and Events by Zabbix agent/service.info[MsMpSvc])=0 and nodata(/Windows Defender and Events by Zabbix agent/eventlog[{$AV_EVENTLOG},,,{$AV_SOURCE},1150,,skip],8h)=1'
+      name: 'Windows Antimalware set macro $AV_EVENTLOG = System'
+      priority: INFO
+      manual_close: 'YES'

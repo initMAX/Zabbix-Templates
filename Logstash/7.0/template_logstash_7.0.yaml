@@ -1,0 +1,769 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: a52d0318944547478607ac597422d642
+      template: Logstash
+      name: Logstash
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 7e4a9656d1124875a9837645fdb2e7a6
+          name: 'Logstash raw data'
+          type: HTTP_AGENT
+          key: logstash
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          url: 'http://{HOST.CONN}:{$LOGSTASH.PORT}/_node/stats'
+          tags:
+            - tag: Logstash
+            - tag: raw
+        - uuid: 3e2d9cadf2394bdd999d0cb1908114e0
+          name: Version
+          type: DEPENDENT
+          key: logstash.version
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.version
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 29fb1c71281f46e3b6972f89f09f21f3
+          name: Status
+          type: DEPENDENT
+          key: logstash.status
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: 'Logstash status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.status
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var map = {"green": 0, "yellow": 1, "red": 2};
+                  return map[value] !== undefined ? map[value] : 3;
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+          triggers:
+            - uuid: c88a4010e0b44523bed1fb179b4d41c0
+              expression: 'last(/Logstash/logstash.status)<>0'
+              name: 'Status is not green'
+              opdata: 'Status: {ITEM.LASTVALUE}'
+              priority: HIGH
+        - uuid: bc8124a9e303414dab86b1e17be4c4b9
+          name: Uptime
+          type: DEPENDENT
+          key: logstash.uptime
+          delay: '0'
+          history: 7d
+          units: uptime
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.uptime_in_millis
+            - type: JAVASCRIPT
+              parameters:
+                - 'return +(value / 1000).toFixed(0);'
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+          triggers:
+            - uuid: d96a8912206940cf9c9d240dcc765d53
+              expression: 'change(/Logstash/logstash.uptime)<0'
+              name: 'Logstash has been restarted'
+              opdata: 'Uptime: {ITEM.LASTVALUE}'
+              priority: INFO
+        - uuid: 965ccc1c7ba34dedbf2a42405e215ec3
+          name: 'Pipeline workers'
+          type: DEPENDENT
+          key: logstash.pipeline.workers
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.pipeline.workers
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 0368e02fa78b4417a4614b943886cc7c
+          name: 'Pipeline batch size'
+          type: DEPENDENT
+          key: logstash.pipeline.batch_size
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.pipeline.batch_size
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 71276103c6fb4658a59bc2b9bec0502e
+          name: 'JVM heap used percent'
+          type: DEPENDENT
+          key: logstash.jvm.mem.heap.used.pct
+          delay: '0'
+          history: 7d
+          units: '%'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.mem.heap_used_percent
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+          triggers:
+            - uuid: 5ec13ea6eee24a35bcef4554f5fc6894
+              expression: 'last(/Logstash/logstash.jvm.mem.heap.used.pct)>{$LOGSTASH.HEAP.WARN}'
+              name: 'JVM heap usage is high'
+              event_name: 'JVM heap usage is above {$LOGSTASH.HEAP.WARN}%'
+              opdata: 'Heap: {ITEM.LASTVALUE}'
+              priority: WARNING
+              dependencies:
+                - name: 'JVM heap usage is critical'
+                  expression: 'last(/Logstash/logstash.jvm.mem.heap.used.pct)>{$LOGSTASH.HEAP.CRIT}'
+            - uuid: 6c86d04579a54638890ac774c2c48bb0
+              expression: 'last(/Logstash/logstash.jvm.mem.heap.used.pct)>{$LOGSTASH.HEAP.CRIT}'
+              name: 'JVM heap usage is critical'
+              event_name: 'JVM heap usage is above {$LOGSTASH.HEAP.CRIT}%'
+              opdata: 'Heap: {ITEM.LASTVALUE}'
+              priority: HIGH
+        - uuid: f3de43ad4e3a440481653117764292c9
+          name: 'JVM heap used'
+          type: DEPENDENT
+          key: logstash.jvm.mem.heap.used
+          delay: '0'
+          history: 7d
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.mem.heap_used_in_bytes
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: d54a9b5bceb243b99afa250060aeba12
+          name: 'JVM heap max'
+          type: DEPENDENT
+          key: logstash.jvm.mem.heap.max
+          delay: '0'
+          history: 7d
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.mem.heap_max_in_bytes
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 9dddd19dfae743bfbe75904dd2a34abd
+          name: 'JVM non-heap used'
+          type: DEPENDENT
+          key: logstash.jvm.mem.nonheap.used
+          delay: '0'
+          history: 7d
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.mem.non_heap_used_in_bytes
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: aa53610cb0b34e34956bb3d5757cecc7
+          name: 'JVM threads'
+          type: DEPENDENT
+          key: logstash.jvm.threads.count
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.threads.count
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 77cca856994043b389fd4aa115432e6a
+          name: 'JVM threads peak'
+          type: DEPENDENT
+          key: logstash.jvm.threads.peak
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.threads.peak_count
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 309f7abb6ced4abc9307006277b0d44e
+          name: 'GC young collection count'
+          type: DEPENDENT
+          key: logstash.jvm.gc.young.count
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.gc.collectors.young.collection_count
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 21c71adc8a39422b9cd00fbbec64c826
+          name: 'GC young collection time'
+          type: DEPENDENT
+          key: logstash.jvm.gc.young.time
+          delay: '0'
+          history: 7d
+          units: ms
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.gc.collectors.young.collection_time_in_millis
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 279072735ffc4059a25bdc7810dc3960
+          name: 'GC old collection count'
+          type: DEPENDENT
+          key: logstash.jvm.gc.old.count
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.gc.collectors.old.collection_count
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 6661606fac40408cba2edd90f9f5c0b3
+          name: 'GC old collection time'
+          type: DEPENDENT
+          key: logstash.jvm.gc.old.time
+          delay: '0'
+          history: 7d
+          units: ms
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.jvm.gc.collectors.old.collection_time_in_millis
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 2cc199d1c0554498b10b8ee41cba3a97
+          name: 'Open file descriptors'
+          type: DEPENDENT
+          key: logstash.process.open_fd
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.open_file_descriptors
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: ae6dfc33cb42497b8edd01a33e2dd2ac
+          name: 'Max file descriptors'
+          type: DEPENDENT
+          key: logstash.process.max_fd
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.max_file_descriptors
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 3a82b8ced4124f65aabab86e8bcde125
+          name: 'File descriptors usage'
+          type: DEPENDENT
+          key: logstash.process.fd.pct
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value);
+                  var open_fd = data.process.open_file_descriptors;
+                  var max_fd = data.process.max_file_descriptors;
+                  return max_fd > 0 ? (open_fd / max_fd * 100).toFixed(2) : 0;
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+          triggers:
+            - uuid: 9213fab39d4b466998eb3a0a57b54c63
+              expression: 'last(/Logstash/logstash.process.fd.pct)>{$LOGSTASH.FD.WARN}'
+              name: 'File descriptors running low'
+              event_name: 'File descriptor usage is above {$LOGSTASH.FD.WARN}%'
+              opdata: 'FD usage: {ITEM.LASTVALUE}'
+              priority: WARNING
+        - uuid: ea4b8e4717e0495e9480d043c9ad18ab
+          name: 'CPU percent'
+          type: DEPENDENT
+          key: logstash.process.cpu.percent
+          delay: '0'
+          history: 7d
+          units: '%'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.cpu.percent
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 65d5ec9732f34541b44017fd87c2044a
+          name: 'Load average 1m'
+          type: DEPENDENT
+          key: logstash.process.load.1m
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.cpu.load_average.1m
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: b62b19b468a4426eac464fdbfdd09ac4
+          name: 'Load average 5m'
+          type: DEPENDENT
+          key: logstash.process.load.5m
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.cpu.load_average.5m
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: a315e891b97d4a0492a41d8d4d26728f
+          name: 'Load average 15m'
+          type: DEPENDENT
+          key: logstash.process.load.15m
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.cpu.load_average.15m
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: abcdbf9c6e20451eaae6de9771b46001
+          name: 'Virtual memory'
+          type: DEPENDENT
+          key: logstash.process.mem.virtual
+          delay: '0'
+          history: 7d
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.process.mem.total_virtual_in_bytes
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: de2f98a5892d40eaa228c27283e4a412
+          name: 'Events in'
+          type: DEPENDENT
+          key: logstash.events.in
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.events.in
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 05390725c78f4d6090b0de91ecc91935
+          name: 'Events out'
+          type: DEPENDENT
+          key: logstash.events.out
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.events.out
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 1bb1247eb3c544cc90d80ea49f49ed16
+          name: 'Events filtered'
+          type: DEPENDENT
+          key: logstash.events.filtered
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.events.filtered
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 12b5c654ebd84fbc8377ac4427e14084
+          name: 'Events duration'
+          type: DEPENDENT
+          key: logstash.events.duration
+          delay: '0'
+          history: 7d
+          units: ms
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.events.duration_in_millis
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: d94440f7fe894a2db9bd4a88df91b41b
+          name: 'Config reload successes'
+          type: DEPENDENT
+          key: logstash.reloads.successes
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.reloads.successes
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+        - uuid: 212905b7529e42d78f59e0dcd98f1b46
+          name: 'Config reload failures'
+          type: DEPENDENT
+          key: logstash.reloads.failures
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.reloads.failures
+            - type: SIMPLE_CHANGE
+              parameters:
+                - ''
+          master_item:
+            key: logstash
+          tags:
+            - tag: Logstash
+          triggers:
+            - uuid: 3cad361f10274cd38897cae59c2499b8
+              expression: 'last(/Logstash/logstash.reloads.failures)>0'
+              name: 'Config reload failure detected'
+              priority: WARNING
+      discovery_rules:
+        - uuid: 56a1c8f808ad43b9ad60ddfe847d29eb
+          name: 'Pipeline discovery'
+          type: DEPENDENT
+          key: logstash.pipeline.discovery
+          delay: '0'
+          lifetime_type: DELETE_NEVER
+          lifetime: '0'
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 834254bdc92943bdba74a17cef36e5d3
+              name: 'Pipeline {#PIPELINE}: events in'
+              type: DEPENDENT
+              key: 'logstash.pipeline.events.in[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.events.in'
+                - type: SIMPLE_CHANGE
+                  parameters:
+                    - ''
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: 499b19a715fe448a817adf95ee91a946
+              name: 'Pipeline {#PIPELINE}: events out'
+              type: DEPENDENT
+              key: 'logstash.pipeline.events.out[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.events.out'
+                - type: SIMPLE_CHANGE
+                  parameters:
+                    - ''
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: b1ee01ed59184e81903a1e31d3d01cae
+              name: 'Pipeline {#PIPELINE}: events filtered'
+              type: DEPENDENT
+              key: 'logstash.pipeline.events.filtered[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.events.filtered'
+                - type: SIMPLE_CHANGE
+                  parameters:
+                    - ''
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: 75dd624d61ce45a591bece731c78ca1a
+              name: 'Pipeline {#PIPELINE}: events duration'
+              type: DEPENDENT
+              key: 'logstash.pipeline.events.duration[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              units: ms
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.events.duration_in_millis'
+                - type: SIMPLE_CHANGE
+                  parameters:
+                    - ''
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: 1490f2e7eff1413e881e1a3f9be956bb
+              name: 'Pipeline {#PIPELINE}: queue events'
+              type: DEPENDENT
+              key: 'logstash.pipeline.queue.events[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.queue.events_count'
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: bda330e0a6234411a7abefed1361deb2
+              name: 'Pipeline {#PIPELINE}: queue type'
+              type: DEPENDENT
+              key: 'logstash.pipeline.queue.type[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              valuemap:
+                name: 'Logstash queue type'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.queue.type'
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var map = {"memory": 0, "persisted": 1};
+                      return map[value] !== undefined ? map[value] : 2;
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: 50d4e2545bfd47b8b70544c9e9536a37
+              name: 'Pipeline {#PIPELINE}: reload successes'
+              type: DEPENDENT
+              key: 'logstash.pipeline.reloads.successes[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.reloads.successes'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+            - uuid: 486d6a2c12104d6590bcf64a0d5b2293
+              name: 'Pipeline {#PIPELINE}: reload failures'
+              type: DEPENDENT
+              key: 'logstash.pipeline.reloads.failures[{#PIPELINE}]'
+              delay: '0'
+              history: 7d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.pipelines.{#PIPELINE}.reloads.failures'
+                - type: SIMPLE_CHANGE
+                  parameters:
+                    - ''
+              master_item:
+                key: logstash
+              tags:
+                - tag: Logstash
+                  value: pipeline
+              trigger_prototypes:
+                - uuid: 8569bad7076b426e8620390a2319c66e
+                  expression: 'last(/Logstash/logstash.pipeline.reloads.failures[{#PIPELINE}])>0'
+                  name: 'Pipeline {#PIPELINE}: reload failure detected'
+                  priority: WARNING
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value);
+                  var result = [];
+                  for (var name in data.pipelines) {
+                      result.push({"{#PIPELINE}": name});
+                  }
+                  return JSON.stringify(result);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: logstash
+      macros:
+        - macro: '{$LOGSTASH.FD.WARN}'
+          value: '80'
+          description: 'File descriptor usage warning threshold (%).'
+        - macro: '{$LOGSTASH.HEAP.CRIT}'
+          value: '95'
+          description: 'JVM heap usage critical threshold (%).'
+        - macro: '{$LOGSTASH.HEAP.WARN}'
+          value: '80'
+          description: 'JVM heap usage warning threshold (%).'
+        - macro: '{$LOGSTASH.PORT}'
+          value: '9600'
+          description: 'Logstash Monitoring API port.'
+      valuemaps:
+        - uuid: 3e7a172bea2447d6a2985da01e8fcad5
+          name: 'Logstash status'
+          mappings:
+            - value: '0'
+              newvalue: green
+            - value: '1'
+              newvalue: yellow
+            - value: '2'
+              newvalue: red
+            - value: '3'
+              newvalue: unknown
+        - uuid: a8ab9c42bbc2426f943df9e0a4554ccf
+          name: 'Logstash queue type'
+          mappings:
+            - value: '0'
+              newvalue: memory
+            - value: '1'
+              newvalue: persisted
+            - value: '2'
+              newvalue: unknown

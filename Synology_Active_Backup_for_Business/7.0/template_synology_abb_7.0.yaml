@@ -1,0 +1,406 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: de252affd0e54a6a9acbbdad55117729
+      template: 'Synology Active Backup for Business'
+      name: 'Synology Active Backup for Business'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 2390abf664fd4b3799a9469f859749d9
+          name: 'ABB: Device results raw'
+          type: SSH
+          key: 'ssh.run[abb.device.results]'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          params: 'sudo -n sqlite3 /{$ABB.VOLUME}/@ActiveBackup/activity.db "ATTACH ''/{$ABB.VOLUME}/@ActiveBackup/config.db'' AS cfg; SELECT json_group_array(json_object(''device_id'', dr.config_device_id, ''device_name'', dr.device_name, ''status'', dr.status, ''transferred_bytes'', dr.transfered_bytes, ''time_start'', dr.time_start, ''time_end'', dr.time_end)) FROM (SELECT * FROM device_result_table WHERE device_result_id IN (SELECT MAX(device_result_id) FROM device_result_table GROUP BY config_device_id)) dr WHERE dr.config_device_id IN (SELECT device_id FROM cfg.backup_task_device)"'
+          username: '{$ABB.SSH.USER}'
+          password: '{$ABB.SSH.PASS}'
+          delay: '{$ABB.INTERVAL}'
+          tags:
+            - tag: ABB
+            - tag: raw
+        - uuid: f723615eb4c5445fa30376cf406c9d4a
+          name: 'ABB: Task results raw'
+          type: SSH
+          key: 'ssh.run[abb.task.results]'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          params: 'sudo -n sqlite3 /{$ABB.VOLUME}/@ActiveBackup/activity.db "SELECT json_group_array(json_object(''task_id'', task_id, ''task_name'', task_name, ''status'', status, ''backup_type'', backup_type, ''time_start'', time_start, ''time_end'', time_end, ''success_count'', success_count, ''warning_count'', warning_count, ''error_count'', error_count)) FROM (SELECT * FROM result_table WHERE result_id IN (SELECT MAX(result_id) FROM result_table GROUP BY task_id))"'
+          username: '{$ABB.SSH.USER}'
+          password: '{$ABB.SSH.PASS}'
+          delay: '{$ABB.INTERVAL}'
+          tags:
+            - tag: ABB
+            - tag: raw
+      discovery_rules:
+        - uuid: 3ccb962974e149eeafd5c369882e34f1
+          name: 'ABB: Device discovery'
+          type: DEPENDENT
+          key: abb.device.discovery
+          delay: '0'
+          lifetime_type: DELETE_AFTER
+          lifetime: 7d
+          enabled_lifetime_type: DISABLE_IMMEDIATELY
+          item_prototypes:
+            - uuid: 3ec1bf857df74ab6b5a239de32b89685
+              name: 'ABB: Device [{#DEVICE.NAME}]: last backup status'
+              type: DEPENDENT
+              key: 'abb.device.status[{#DEVICE.ID}]'
+              delay: '0'
+              history: 30d
+              valuemap:
+                name: 'ABB backup status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.device_id=={#DEVICE.ID})].status.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'ssh.run[abb.device.results]'
+              tags:
+                - tag: ABB
+                  value: device
+              trigger_prototypes:
+                - uuid: bfc433587ee74e51be3fd7f5d33ca319
+                  expression: 'last(/Synology Active Backup for Business/abb.device.status[{#DEVICE.ID}])=4'
+                  name: 'ABB: Backup FAILED on {#DEVICE.NAME}'
+                  opdata: 'Status: {ITEM.LASTVALUE}'
+                  priority: HIGH
+                - uuid: 4c6e37ae30bc4f9a82d2b2682d890c65
+                  expression: 'last(/Synology Active Backup for Business/abb.device.status[{#DEVICE.ID}])=5'
+                  name: 'ABB: Backup WARNING on {#DEVICE.NAME}'
+                  opdata: 'Status: {ITEM.LASTVALUE}'
+                  priority: WARNING
+                - uuid: 5f161e1e3ef44358a90833ad887dfebe
+                  expression: 'last(/Synology Active Backup for Business/abb.device.status[{#DEVICE.ID}])=3'
+                  name: 'ABB: Backup CANCELLED on {#DEVICE.NAME}'
+                  opdata: 'Status: {ITEM.LASTVALUE}'
+                  priority: WARNING
+            - uuid: cbea65e280714055b2434e794c92c8ec
+              name: 'ABB: Device [{#DEVICE.NAME}]: transferred bytes'
+              type: DEPENDENT
+              key: 'abb.device.transferred[{#DEVICE.ID}]'
+              delay: '0'
+              history: 30d
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.device_id=={#DEVICE.ID})].transferred_bytes.first()'
+              master_item:
+                key: 'ssh.run[abb.device.results]'
+              tags:
+                - tag: ABB
+                  value: device
+            - uuid: 50b2d4b78240434ea64da57ff7533b93
+              name: 'ABB: Device [{#DEVICE.NAME}]: last backup start'
+              type: DEPENDENT
+              key: 'abb.device.time.start[{#DEVICE.ID}]'
+              delay: '0'
+              history: 30d
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.device_id=={#DEVICE.ID})].time_start.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'ssh.run[abb.device.results]'
+              tags:
+                - tag: ABB
+                  value: device
+            - uuid: e674f748468d44ea8f662db5dcbae25e
+              name: 'ABB: Device [{#DEVICE.NAME}]: last backup end'
+              type: DEPENDENT
+              key: 'abb.device.time.end[{#DEVICE.ID}]'
+              delay: '0'
+              history: 30d
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.device_id=={#DEVICE.ID})].time_end.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'ssh.run[abb.device.results]'
+              tags:
+                - tag: ABB
+                  value: device
+            - uuid: 914391d665ee416fb15db27392e31535
+              name: 'ABB: Device [{#DEVICE.NAME}]: backup duration'
+              type: DEPENDENT
+              key: 'abb.device.duration[{#DEVICE.ID}]'
+              delay: '0'
+              history: 30d
+              units: s
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.device_id=={#DEVICE.ID})]'
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data = JSON.parse(value);
+                      if (data.length > 0 && data[0].time_end > 0 && data[0].time_start > 0) {
+                          return data[0].time_end - data[0].time_start;
+                      }
+                      return 0;
+              master_item:
+                key: 'ssh.run[abb.device.results]'
+              tags:
+                - tag: ABB
+                  value: device
+            - uuid: fe3ffefbf397486b91d06d3343f42471
+              name: 'ABB: Device [{#DEVICE.NAME}]: time since last backup'
+              type: DEPENDENT
+              key: 'abb.device.time.since[{#DEVICE.ID}]'
+              delay: '0'
+              history: 30d
+              units: s
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.device_id=={#DEVICE.ID})].time_end.first()'
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'return Math.floor(Date.now() / 1000) - parseInt(value);'
+              master_item:
+                key: 'ssh.run[abb.device.results]'
+              tags:
+                - tag: ABB
+                  value: device
+              trigger_prototypes:
+                - uuid: fcd35d963aeb45b5a5d5206e718c31c1
+                  expression: 'last(/Synology Active Backup for Business/abb.device.time.since[{#DEVICE.ID}])>{$ABB.NO.BACKUP.WARN}'
+                  name: 'ABB: No backup for {#DEVICE.NAME} in {$ABB.NO.BACKUP.WARN}'
+                  opdata: 'Last backup: {ITEM.LASTVALUE} ago'
+                  priority: WARNING
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value);
+                  var result = [];
+                  for (var i = 0; i < data.length; i++) {
+                      result.push({
+                          "{#DEVICE.ID}": String(data[i].device_id),
+                          "{#DEVICE.NAME}": data[i].device_name
+                      });
+                  }
+                  return JSON.stringify(result);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'ssh.run[abb.device.results]'
+        - uuid: 737fab20ac6a40ccacd9612eaa06a6d6
+          name: 'ABB: Task discovery'
+          type: DEPENDENT
+          key: abb.task.discovery
+          delay: '0'
+          lifetime_type: DELETE_AFTER
+          lifetime: 7d
+          enabled_lifetime_type: DISABLE_IMMEDIATELY
+          item_prototypes:
+            - uuid: 02baef9d3fd543718108981687f65709
+              name: 'ABB: Task [{#TASK.NAME}]: last status'
+              type: DEPENDENT
+              key: 'abb.task.status[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              valuemap:
+                name: 'ABB backup status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})].status.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+            - uuid: 3b8692ded6264542a1d36f6d0ffed0a2
+              name: 'ABB: Task [{#TASK.NAME}]: success count'
+              type: DEPENDENT
+              key: 'abb.task.success.count[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})].success_count.first()'
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+            - uuid: b01c06da17b94706aa621c01a362be8b
+              name: 'ABB: Task [{#TASK.NAME}]: warning count'
+              type: DEPENDENT
+              key: 'abb.task.warning.count[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})].warning_count.first()'
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+            - uuid: e0f257a0b6564147a48a5fa0d1b70737
+              name: 'ABB: Task [{#TASK.NAME}]: error count'
+              type: DEPENDENT
+              key: 'abb.task.error.count[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})].error_count.first()'
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+              trigger_prototypes:
+                - uuid: 5e4658fcce7546cabadb629bdd4bd5bb
+                  expression: 'last(/Synology Active Backup for Business/abb.task.error.count[{#TASK.ID}])>0'
+                  name: 'ABB: Task {#TASK.NAME} has {ITEM.LASTVALUE} errors'
+                  priority: HIGH
+            - uuid: 8672e1e916f7442883d6b5806302f068
+              name: 'ABB: Task [{#TASK.NAME}]: last start'
+              type: DEPENDENT
+              key: 'abb.task.time.start[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})].time_start.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+            - uuid: 718f2c1d8c364fa98303788da26fd8b2
+              name: 'ABB: Task [{#TASK.NAME}]: last end'
+              type: DEPENDENT
+              key: 'abb.task.time.end[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})].time_end.first()'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+            - uuid: e7d877059b3d4c688187d21922fe6c0a
+              name: 'ABB: Task [{#TASK.NAME}]: duration'
+              type: DEPENDENT
+              key: 'abb.task.duration[{#TASK.ID}]'
+              delay: '0'
+              history: 30d
+              units: s
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.task_id=={#TASK.ID})]'
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var data = JSON.parse(value);
+                      if (data.length > 0 && data[0].time_end > 0 && data[0].time_start > 0) {
+                          return data[0].time_end - data[0].time_start;
+                      }
+                      return 0;
+              master_item:
+                key: 'ssh.run[abb.task.results]'
+              tags:
+                - tag: ABB
+                  value: task
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value);
+                  var result = [];
+                  for (var i = 0; i < data.length; i++) {
+                      result.push({
+                          "{#TASK.ID}": String(data[i].task_id),
+                          "{#TASK.NAME}": data[i].task_name,
+                          "{#BACKUP.TYPE}": String(data[i].backup_type)
+                      });
+                  }
+                  return JSON.stringify(result);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: 'ssh.run[abb.task.results]'
+      macros:
+        - macro: '{$ABB.INTERVAL}'
+          value: 10m
+          description: 'Data collection interval.'
+        - macro: '{$ABB.NO.BACKUP.WARN}'
+          value: '172800'
+          description: 'Time in seconds after which missing backup triggers warning (default 48h).'
+        - macro: '{$ABB.SSH.PASS}'
+          description: 'SSH password for the monitoring user on Synology NAS.'
+        - macro: '{$ABB.SSH.USER}'
+          value: zabbix
+          description: 'SSH username for the monitoring user on Synology NAS.'
+        - macro: '{$ABB.VOLUME}'
+          value: volume1
+          description: 'Synology storage volume where Active Backup data resides.'
+      valuemaps:
+        - uuid: 1d65f4e0c50f46e8be7de1d2ffe2cb68
+          name: 'ABB backup status'
+          mappings:
+            - value: '1'
+              newvalue: 'In progress'
+            - value: '2'
+              newvalue: Successful
+            - value: '3'
+              newvalue: Cancelled
+            - value: '4'
+              newvalue: Failed
+            - value: '5'
+              newvalue: Warning
+            - value: '8'
+              newvalue: 'Partial success'

@@ -1,0 +1,282 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 839b836843db4990a69dc4645c64e2a2
+      template: 'Windows Update by Zabbix agent'
+      name: 'Windows Update by Zabbix agent'
+      description: |
+        # Overview
+
+        Pending Windows updates and the pending-reboot flag, read through a Zabbix agent.
+
+        Two independent collectors:
+
+        - an active check on the registry, reporting whether Windows is waiting for a reboot
+          to finish installing updates;
+        - a passive `system.run` item, which asks the Windows Update Agent over COM for the
+          updates that are neither installed nor hidden, plus a dependent item counting them.
+
+        ## Requirements
+
+        Zabbix version: 7.0 and higher.
+
+        Zabbix agent 7.0 and higher, on Windows. The version matters: the update search sets
+        its own item timeout, which older agents ignore in favour of their own Timeout - 3s by
+        default, far too short for this search.
+
+        The host needs both an agent interface and active checks configured (ServerActive and
+        Hostname in the agent configuration): "Windows Update: Reboot required" is an active check, the
+        update search is a passive one.
+
+        ## Setup
+
+        1. Allow the ONE remote command in the agent configuration: put the shipped
+           `windows_update.conf` into the agent's include directory (zabbix_agentd.d or
+           zabbix_agent2.d) and restart the agent. It holds a single AllowKey line for exactly
+           the command this template runs. `system.run` stays denied for everything else - the
+           agent appends its own DenyKey=system.run[*] after all configured rules - so no
+           DenyKey line is shipped: an explicit one in an include file would also switch off
+           any AllowKey rule that another file adds later. Step-by-step commands are in the
+           README next to this template.
+
+        2. The agent has to run as an account that may talk to the Windows Update Agent over
+           COM. LocalSystem, the default, may; an ordinary service account usually may not.
+
+        3. Link the template to the host and review {$WU.COUNT.WARN} - how many pending
+           updates are tolerated before the trigger fires.
+
+        ## Notes
+
+        The search is answered by Windows Update or by the WSUS server, so it is slow: on a
+        machine that has not checked in for a while it takes minutes. That is why it runs once
+        an hour at most, has a 3m item timeout, and why the result is throttled to one stored
+        value per day unless the list changes.
+
+        `ConvertTo-Json` returns a bare object for a single update and an array for several.
+        The counter accepts both, and the empty output that PowerShell prints when nothing is
+        pending counts as zero.
+
+        The pending-reboot flag comes from the registry key
+
+            HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired
+
+        which Windows creates empty - only its existence carries the meaning. The item
+        therefore lists the subkeys of "Auto Update" and looks for that name among them,
+        instead of reading the key itself.
+
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 4bd4977c31fe4e3da40e5d32e5c117f1
+          name: 'Windows Update: Reboot required'
+          type: ZABBIX_ACTIVE
+          key: 'registry.get["HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update",keys]'
+          delay: '{$WU.REBOOT.INTERVAL}'
+          history: 90d
+          value_type: UNSIGNED
+          valuemap:
+            name: 'Reboot required'
+          description: |
+            Whether Windows is waiting for a reboot to finish installing updates.
+
+            Windows signals this by creating the registry key
+
+                HKLM\SOFTWARE\...\WindowsUpdate\Auto Update\RebootRequired
+
+            which is normally empty - only its existence carries the meaning. The item
+            therefore lists the subkeys of "Auto Update" in "keys" mode and looks for that
+            name among them:
+
+            - CHECK_NOT_SUPPORTED catches the case where not even "Auto Update" can be read
+              and reports 0 instead of letting the item go unsupported.
+            - The regular expression turns a hit into 1; no hit falls through to its own error
+              handler, which is also 0.
+            - DISCARD_UNCHANGED_HEARTBEAT stores one value per 4h while the flag holds still.
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: REGEX
+              parameters:
+                - RebootRequired
+                - '1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 4h
+          tags:
+            - tag: component
+              value: 'windows update'
+          triggers:
+            - uuid: 5bcdc69d380b4be386e403125085bcc2
+              expression: 'last(/Windows Update by Zabbix agent/registry.get["HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update",keys])=1'
+              name: 'Windows Update: Restart required'
+              priority: AVERAGE
+              description: |
+                Windows has installed updates that only take effect after a reboot.
+
+                Windows clears the flag itself once the machine has come back up, so the
+                problem resolves on its own after the restart.
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 081d25a6ef694cd3969fd2d9a13e292a
+          name: 'Windows Update: Pending updates RAW'
+          key: 'system.run["powershell \"(New-Object -ComObject Microsoft.Update.Session).CreateupdateSearcher().Search(''IsHidden=0 and IsInstalled=0'').Updates|Select-Object Title |ConvertTo-Json\""]'
+          delay: '{$WU.INTERVAL}'
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: |
+            Titles of the updates that the Windows Update Agent reports as neither installed
+            nor hidden, as JSON.
+
+            Master item of the counter. Requires system.run to be allowed in the agent
+            configuration, see the template description.
+
+            The search is answered by Windows Update or by the WSUS server and can take
+            minutes, which is what the 3m item timeout is for. DISCARD_UNCHANGED_HEARTBEAT
+            stores a new value only when the list changes, or once a day, and that is what
+            keeps 90 days of history affordable for a TEXT item.
+
+            The list is kept rather than thrown away so that it stays possible to look back at
+            which updates were pending when.
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          timeout: 3m
+          tags:
+            - tag: component
+              value: 'windows update'
+        - uuid: f6d3c2fbd2f042d88247224110667662
+          name: 'Windows Update: Pending update count'
+          type: DEPENDENT
+          key: win.update.count
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: UNSIGNED
+          description: |
+            Number of pending updates.
+
+            `ConvertTo-Json` returns a bare object when exactly one update is pending and an
+            array when there are more, so the JavaScript accepts both shapes. The empty output
+            that PowerShell prints when nothing is pending counts as zero.
+
+            Anything that is not JSON - typically a PowerShell error printed instead of data -
+            fails the item, with the first 200 characters of the output in the error message.
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Counts the pending updates. ConvertTo-Json returns a bare object for one
+                  // update, an array for several, and nothing at all when none is pending.
+                  var text = String(value).trim();
+
+                  if (text === '') {
+                      return 0;
+                  }
+
+                  var updates;
+
+                  try {
+                      updates = JSON.parse(text);
+                  }
+                  catch (e) {
+                      throw 'Cannot parse the update list as JSON, the command most likely returned an error ' +
+                          'instead of data: ' + text.substring(0, 200);
+                  }
+
+                  if (updates === null) {
+                      return 0;
+                  }
+
+                  return Array.isArray(updates) ? updates.length : 1;
+          master_item:
+            key: 'system.run["powershell \"(New-Object -ComObject Microsoft.Update.Session).CreateupdateSearcher().Search(''IsHidden=0 and IsInstalled=0'').Updates|Select-Object Title |ConvertTo-Json\""]'
+          tags:
+            - tag: component
+              value: 'windows update'
+          triggers:
+            - uuid: 03762a9cd33647d5bca6ba05ab1ae71c
+              expression: 'last(/Windows Update by Zabbix agent/win.update.count)>={$WU.COUNT.WARN}'
+              name: 'Windows Update: At least {$WU.COUNT.WARN} updates are pending'
+              event_name: 'Windows Update: {ITEM.LASTVALUE1} updates are pending'
+              priority: WARNING
+              description: |
+                The machine has at least {$WU.COUNT.WARN} updates waiting to be installed.
+
+                The default is deliberately not 1: right after a patch release every machine
+                has something pending and alerting on that is noise. Lower it on hosts where
+                any missing update matters, raise it where a backlog is normal.
+
+                Pending updates: {ITEM.VALUE}
+              tags:
+                - tag: scope
+                  value: security
+            - uuid: 01290b7419694b29a70b2302ffc710da
+              expression: 'nodata(/Windows Update by Zabbix agent/win.update.count,{$WU.NODATA})=1'
+              name: 'Windows Update: No data collected for {$WU.NODATA}'
+              priority: WARNING
+              description: |
+                The update search has delivered nothing for {$WU.NODATA}.
+
+                Usual causes: system.run is not allowed in the agent configuration, the agent
+                is unreachable, or the search keeps hitting the item timeout because Windows
+                Update or the WSUS server cannot be reached.
+
+                Keep the window above one day. The master item throttles an unchanged list to
+                one value per day, so a shorter window would fire on any machine whose set of
+                pending updates simply does not change.
+              tags:
+                - tag: scope
+                  value: availability
+      valuemaps:
+        - uuid: 983d46ca99fb45bdb6a5579b85077d43
+          name: 'Reboot required'
+          mappings:
+            - value: '0'
+              newvalue: 'No'
+            - value: '1'
+              newvalue: 'Yes'
+      macros:
+        - macro: '{$WU.COUNT.WARN}'
+          value: '10'
+          description: |
+            How many pending updates are tolerated before the trigger fires.
+
+            Set it to 1 to be told about any pending update at all; raise it on machines that
+            are patched on a slow cycle.
+        - macro: '{$WU.INTERVAL}'
+          value: 1h
+          description: |
+            How often the list of pending updates is fetched.
+
+            Every check runs a PowerShell process and a search against Windows Update or WSUS,
+            which takes minutes on a machine that has not checked in for a while. There is
+            nothing to gain from a shorter interval.
+        - macro: '{$WU.NODATA}'
+          value: 2d
+          description: |
+            How long the update search may deliver nothing before the no-data trigger fires.
+
+            Has to stay above one day, because the master item stores an unchanged list only
+            once a day.
+        - macro: '{$WU.REBOOT.INTERVAL}'
+          value: 10m
+          description: 'How often the pending-reboot flag is read from the registry. This check is cheap - it only reads the registry.'
