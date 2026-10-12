@@ -1,0 +1,243 @@
+zabbix_export:
+  version: '7.0'
+  media_types:
+    - name: WhatsApp
+      type: WEBHOOK
+      parameters:
+        - name: access_token
+          value: '<Access Token>'
+        - name: event_date
+          value: '{EVENT.DATE}'
+        - name: event_id
+          value: '{EVENT.ID}'
+        - name: event_name
+          value: '{EVENT.NAME}'
+        - name: event_severity
+          value: '{EVENT.SEVERITY}'
+        - name: event_status
+          value: '{EVENT.STATUS}'
+        - name: event_time
+          value: '{EVENT.TIME}'
+        - name: host_name
+          value: '{HOST.NAME}'
+        - name: item_id
+          value: '{ITEM.ID}'
+        - name: item_lastvalue
+          value: '{{ITEM.LASTVALUE}.regsub("^(.{0,500}).*$", "\1…")}'
+        - name: meta_url
+          value: 'https://graph.facebook.com/v22.0/'
+        - name: phone_number_id
+          value: '<Phone number ID>'
+        - name: recipient
+          value: '{ALERT.SENDTO}'
+      attempts: '1'
+      script: |
+        var WhatsApp = {
+          request: function(params, payload) {
+            var request = new HttpRequest();
+        
+            /* ==== ENDPOINT ================================================= */
+            var endpoint = params.meta_url + params.phone_number_id + '/messages';
+        
+            var payloadStr = JSON.stringify(payload);
+        
+            /* ==== HEADERS ================================================== */
+            request.addHeader('Content-Type: application/json; charset=utf-8');
+            request.addHeader('Authorization: Bearer ' + params.access_token);
+        
+            Zabbix.log(4, '[WhatsApp Webhook] Endpoint: ' + endpoint);
+            Zabbix.log(4, '[WhatsApp Webhook] Headers: ' + JSON.stringify({
+              'Content-Type': 'application/json; charset=utf-8',
+              'Authorization': 'Bearer ' + params.access_token,
+              'Content-Length': payloadStr.length
+            }));
+            Zabbix.log(4, '[WhatsApp Webhook] Payload: ' + payloadStr);
+        
+            var response = request.post(endpoint, payloadStr);
+        
+            Zabbix.log(4, '[WhatsApp Webhook] Response status: ' + request.getStatus());
+            Zabbix.log(4, '[WhatsApp Webhook] Response body: ' + response);
+        
+            if (request.getStatus() !== 200 || !response) {
+              throw 'WhatsApp API error: HTTP ' + request.getStatus() + ' - ' + response;
+            }
+        
+            var jsonResponse = JSON.parse(response);
+        
+            if (!jsonResponse.messages || jsonResponse.messages.length === 0) {
+              throw 'WhatsApp API response error: ' + response;
+            }
+        
+            return 'OK';
+          }
+        };
+        
+        try {
+          var params = JSON.parse(value);
+        
+          if (!params.access_token || !params.phone_number_id || !params.recipient) {
+            throw 'Missing required parameters (access_token, phone_number_id, recipient).';
+          }
+        
+          var recipientNumber = params.recipient.replace(/[^\d]/g, '');
+        
+          if (!/^\d+$/.test(recipientNumber)) {
+            throw 'Invalid phone number format: ' + params.recipient;
+          }
+        
+          /* === NEW: URL-encode values for the two URL buttons ============== */
+          var eventNameEncoded = encodeURIComponent(params.event_name || '');
+          var itemIdEncoded    = encodeURIComponent(params.item_id    || '');
+        
+          /* === PAYLOAD ===================================================== */
+          var payload = {
+            messaging_product: "whatsapp",
+            to: recipientNumber,
+            type: "template",
+            template: {
+              name: "hello_world",
+              language: { code: "en_US" },
+              components: [
+                {
+                  type: "header",
+                  parameters: [
+                    { type: "text", parameter_name: "event_status", text: params.event_status }
+                  ]
+                },
+                {
+                  type: "body",
+                  parameters: [
+                    { type: "text", parameter_name: "event_name",      text: params.event_name },
+                    { type: "text", parameter_name: "event_time",      text: params.event_time },
+                    { type: "text", parameter_name: "event_date",      text: params.event_date },
+                    { type: "text", parameter_name: "host_name",       text: params.host_name },
+                    { type: "text", parameter_name: "event_severity",  text: params.event_severity },
+                    { type: "text", parameter_name: "item_lastvalue",  text: params.item_lastvalue },
+                    { type: "text", parameter_name: "event_id",        text: params.event_id }
+                  ]
+                },
+                /* ---------- BUTTON 0  (URL, uses event_name) ---------------- */
+                {
+                  type: "button",
+                  sub_type: "url",
+                  index: 0,
+                  parameters: [
+                    { type: "text", parameter_name: "event_name", text: eventNameEncoded }
+                  ]
+                },
+                /* ---------- BUTTON 1  (URL, uses item_id) ------------------- */
+                {
+                  type: "button",
+                  sub_type: "url",
+                  index: 1,
+                  parameters: [
+                    { type: "text", parameter_name: "item_id", text: itemIdEncoded }
+                  ]
+                }
+              ]
+            }
+          };
+        
+          return WhatsApp.request(params, payload);
+        
+        } catch (error) {
+          Zabbix.log(4, '[WhatsApp Webhook] Error: ' + error);
+          throw 'WhatsApp notification failed: ' + error;
+        }
+      description: |
+        Sends Zabbix alerts via WhatsApp Cloud API using template
+        "hello_world" with named variables and two dynamic URL buttons.
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      message_templates:
+        - event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: 'Problem: {EVENT.NAME}'
+          message: |
+            Problem started at {EVENT.TIME} on {EVENT.DATE}
+            Problem name: {EVENT.NAME}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Operational data: {EVENT.OPDATA}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: RECOVERY
+          subject: 'Resolved in {EVENT.DURATION}: {EVENT.NAME}'
+          message: |
+            Problem has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            Problem name: {EVENT.NAME}
+            Problem duration: {EVENT.DURATION}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: UPDATE
+          subject: 'Updated problem in {EVENT.AGE}: {EVENT.NAME}'
+          message: |
+            {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            {EVENT.UPDATE.MESSAGE}
+            
+            Current problem status is {EVENT.STATUS}, age is {EVENT.AGE}, acknowledged: {EVENT.ACK.STATUS}.
+        - event_source: DISCOVERY
+          operation_mode: PROBLEM
+          subject: 'Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}'
+          message: |
+            Discovery rule: {DISCOVERY.RULE.NAME}
+            
+            Device IP: {DISCOVERY.DEVICE.IPADDRESS}
+            Device DNS: {DISCOVERY.DEVICE.DNS}
+            Device status: {DISCOVERY.DEVICE.STATUS}
+            Device uptime: {DISCOVERY.DEVICE.UPTIME}
+            
+            Device service name: {DISCOVERY.SERVICE.NAME}
+            Device service port: {DISCOVERY.SERVICE.PORT}
+            Device service status: {DISCOVERY.SERVICE.STATUS}
+            Device service uptime: {DISCOVERY.SERVICE.UPTIME}
+        - event_source: AUTOREGISTRATION
+          operation_mode: PROBLEM
+          subject: 'Autoregistration: {HOST.HOST}'
+          message: |
+            Host name: {HOST.HOST}
+            Host IP: {HOST.IP}
+            Agent port: {HOST.PORT}
+        - event_source: INTERNAL
+          operation_mode: PROBLEM
+        - event_source: INTERNAL
+          operation_mode: RECOVERY
+        - event_source: SERVICE
+          operation_mode: PROBLEM
+          subject: 'Service "{SERVICE.NAME}" problem: {EVENT.NAME}'
+          message: |
+            Service problem started at {EVENT.TIME} on {EVENT.DATE}
+            Service problem name: {EVENT.NAME}
+            Service: {SERVICE.NAME}
+            Severity: {EVENT.SEVERITY}
+            Original problem ID: {EVENT.ID}
+            Service description: {SERVICE.DESCRIPTION}
+            
+            {SERVICE.ROOTCAUSE}
+        - event_source: SERVICE
+          operation_mode: RECOVERY
+          subject: 'Service "{SERVICE.NAME}" resolved in {EVENT.DURATION}: {EVENT.NAME}'
+          message: |
+            Service "{SERVICE.NAME}" has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            Problem name: {EVENT.NAME}
+            Problem duration: {EVENT.DURATION}
+            Severity: {EVENT.SEVERITY}
+            Original problem ID: {EVENT.ID}
+            Service description: {SERVICE.DESCRIPTION}
+        - event_source: SERVICE
+          operation_mode: UPDATE
+          subject: 'Changed "{SERVICE.NAME}" service status to {EVENT.UPDATE.SEVERITY} in {EVENT.AGE}'
+          message: |
+            Changed "{SERVICE.NAME}" service status to {EVENT.UPDATE.SEVERITY} at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            Current problem age is {EVENT.AGE}.
+            Service description: {SERVICE.DESCRIPTION}
+            
+            {SERVICE.ROOTCAUSE}

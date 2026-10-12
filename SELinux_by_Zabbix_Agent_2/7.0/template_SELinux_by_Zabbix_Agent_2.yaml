@@ -1,0 +1,138 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 2a4fa952ca914af9b43756a71667682e
+      template: SELinux
+      name: SELinux
+      description: |
+        Installation details can be found in our initMAX WIKI:
+        EN https://www.initmax.com/wiki/selinux-integration-with-zabbix-and-other-tools
+        CZ https://www.initmax.cz/wiki/selinux-integrace-se-zabbixem-a-dalsimi-nastroji
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: eac19da77e9b444bb0ad6406132cf500
+          name: 'SELinux AVC denials'
+          type: ZABBIX_ACTIVE
+          key: 'log[/var/log/selinux_denials.log,"^type=AVC msg=audit\(([0-9.]+):[0-9]+\): avc:\s+denied\s+{[^}]+}\s+for\s+pid=([0-9]+)\s+comm=\"([^\"]+)\".*scontext=([^ ]+)\s+tcontext=([^ ]+)\s+tclass=([^ ]+)\s+permissive=([01])",,,skip,"Time: \1 | PID: \2 | Comm: \3 | SContext: \4 | TContext: \5 | Class: \6 | Permissive: \7"]'
+          delay: 1s
+          history: 7d
+          value_type: LOG
+          trends: '0'
+          tags:
+            - tag: source
+              value: selinux
+          triggers:
+            - uuid: 9cd847e6cd2d4642958e21cd22492169
+              expression: 'length(last(/SELinux/log[/var/log/selinux_denials.log,"^type=AVC msg=audit\(([0-9.]+):[0-9]+\): avc:\s+denied\s+{[^}]+}\s+for\s+pid=([0-9]+)\s+comm=\"([^\"]+)\".*scontext=([^ ]+)\s+tcontext=([^ ]+)\s+tclass=([^ ]+)\s+permissive=([01])",,,skip,"Time: \1 | PID: \2 | Comm: \3 | SContext: \4 | TContext: \5 | Class: \6 | Permissive: \7"]))<>0'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'nodata(/SELinux/log[/var/log/selinux_denials.log,"^type=AVC msg=audit\(([0-9.]+):[0-9]+\): avc:\s+denied\s+{[^}]+}\s+for\s+pid=([0-9]+)\s+comm=\"([^\"]+)\".*scontext=([^ ]+)\s+tcontext=([^ ]+)\s+tclass=([^ ]+)\s+permissive=([01])",,,skip,"Time: \1 | PID: \2 | Comm: \3 | SContext: \4 | TContext: \5 | Class: \6 | Permissive: \7"],{$TRIGGER.CLOSE.TIME})=1'
+              name: 'SELinux blocked: {ITEM.VALUE}'
+              event_name: 'SELinux blocked: PID={{ITEM.VALUE}.regsub(".*PID: ([0-9]+).*", "\1")} Comm={{ITEM.VALUE}.regsub(".*Comm: ([^|]+).*", "\1")} Class={{ITEM.VALUE}.regsub(".*Class: ([^|]+).*", "\1")}'
+              priority: WARNING
+              description: 'This trigger will automatically close after {$TRIGGER.CLOSE.TIME} if no further blocked applications are detected.'
+              type: MULTIPLE
+              tags:
+                - tag: class
+                  value: '{{ITEM.VALUE}.regsub(".*Class: ([^|]+).*", "\1")}'
+                - tag: comm
+                  value: '{{ITEM.VALUE}.regsub(".*Comm: ([^|]+).*", "\1")}'
+                - tag: pid
+                  value: '{{ITEM.VALUE}.regsub(".*PID: ([^|]+).*", "\1")}'
+                - tag: source
+                  value: selinux
+        - uuid: b4c86931b5ba43e090ce3687a9f5f2b4
+          name: 'Auditd service state (systemd)'
+          type: ZABBIX_ACTIVE
+          key: 'systemd.unit.info[auditd.service]'
+          value_type: CHAR
+          trends: '0'
+          description: 'Returning active, inactive, failed'
+          tags:
+            - tag: source
+              value: auditd
+          triggers:
+            - uuid: 84e15ac7fb154384b8ae3063cf89ec30
+              expression: 'last(/SELinux/systemd.unit.info[auditd.service])<>"active"'
+              name: 'Auditd service is NOT running'
+              event_name: 'Auditd service is NOT running (state: {ITEM.LASTVALUE})'
+              priority: HIGH
+              tags:
+                - tag: category
+                  value: security
+                - tag: service
+                  value: systemd
+                - tag: source
+                  value: auditd
+        - uuid: 25676c1f11bb438ba6cbaadb5435cd51
+          name: 'SELinux mode (getenforce)'
+          type: ZABBIX_ACTIVE
+          key: 'vfs.file.contents[/sys/fs/selinux/enforce]'
+          trends: '0'
+          valuemap:
+            name: 'SELinux status'
+          tags:
+            - tag: source
+              value: selinux
+          triggers:
+            - uuid: be986d6fb3264ab1bad1f4e06f590492
+              expression: 'last(/SELinux/vfs.file.contents[/sys/fs/selinux/enforce])<>1'
+              name: 'SELinux is not enforcing'
+              event_name: 'SELinux is not enforcing (value: {ITEM.LASTVALUE})'
+              priority: HIGH
+              tags:
+                - tag: category
+                  value: security
+                - tag: mode
+                  value: runtime
+                - tag: source
+                  value: selinux
+        - uuid: d852258e95404a47b5c4579c42f1a103
+          name: 'SELinux boot configuration (mode from config)'
+          type: ZABBIX_ACTIVE
+          key: 'vfs.file.regexp[/etc/selinux/config,^SELINUX=(\w+),,,,\1]'
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          tags:
+            - tag: source
+              value: selinux_config
+          triggers:
+            - uuid: 237583a3c4fa4aacba6371c0d702d84d
+              expression: 'last(/SELinux/vfs.file.regexp[/etc/selinux/config,^SELINUX=(\w+),,,,\1])<>"enforcing"'
+              name: 'SELinux boot mode is not enforcing'
+              event_name: 'SELinux boot mode is not enforcing (value: {ITEM.LASTVALUE})'
+              priority: HIGH
+              tags:
+                - tag: category
+                  value: configuration
+                - tag: mode
+                  value: config
+                - tag: source
+                  value: selinux
+      macros:
+        - macro: '{$TRIGGER.CLOSE.TIME}'
+          value: 30m
+          description: 'This trigger will automatically close after {$TRIGGER.CLOSE.TIME} if no further blocked applications are detected.'
+      valuemaps:
+        - uuid: f7bbde78ee504aaabdbff7a766ba6a06
+          name: 'SELinux status'
+          mappings:
+            - value: '1'
+              newvalue: Enforcing
+            - value: '0'
+              newvalue: 'NOT Enforcing!'
+            - type: DEFAULT
+              newvalue: Unknown

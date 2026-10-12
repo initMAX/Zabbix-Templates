@@ -1,0 +1,71 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: e0f93619abb4470e8d77d59899dc9dcd
+      template: 'Meter ESP32 by MQTT'
+      name: 'Meter ESP32 by MQTT'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-1
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: fcea77415c764f3f929fa3c7d1896e6d
+          name: 'Meter MQTT - daily consumption'
+          type: CALCULATED
+          key: meter.mqtt.daily
+          delay: 0;h0
+          value_type: FLOAT
+          units: m3
+          params: 'last(//meter.status,#1) - last(//meter.status,#1:now-1d)'
+          tags:
+            - tag: Daily
+        - uuid: 29bb15ffe68843b19dfec61e8b1c0a1b
+          name: 'Meter MQTT Status'
+          type: DEPENDENT
+          key: meter.mqtt.status
+          value_type: FLOAT
+          units: m3
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  data = JSON.parse(value);
+                  if ( data.error == "no error" ) return value;
+                  else return data.error;
+            - type: JSONPATH
+              parameters:
+                - $.raw
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'mqtt.get[tcp://127.0.0.1:1883,/workshop/meter{$WORKSHOP.NUMBER}/main/json]'
+          tags:
+            - tag: Status
+        - uuid: c946ead75e364b39bd7105e6c70b2114
+          name: 'Watermeter MQTT stream m3 / s'
+          type: DEPENDENT
+          key: meter.mqtt.stream
+          value_type: FLOAT
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+          master_item:
+            key: meter.mqtt.status
+          tags:
+            - tag: Stream
+        - uuid: 31aa016b2e724eb7872dae1ef42e0069
+          name: 'Meter MQTT RAW'
+          type: ZABBIX_ACTIVE
+          key: 'mqtt.get[tcp://127.0.0.1:1883,/workshop/meter{$WORKSHOP.NUMBER}/main/json]'
+          value_type: TEXT
+          tags:
+            - tag: RAW
+      macros:
+        - macro: '{$WORKSHOP.NUMBER}'

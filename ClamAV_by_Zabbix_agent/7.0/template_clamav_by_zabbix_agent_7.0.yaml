@@ -1,0 +1,650 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 6b96c6e8e734474ab417c8777ee1ef1a
+      template: 'ClamAV by Zabbix agent'
+      name: 'ClamAV by Zabbix agent'
+      description: |
+        # Overview
+
+        ClamAV on a Linux host through the Zabbix agent: the clamd and freshclam daemons, the
+        age of the signature database, and the results of the scheduled scan from its log.
+
+        - Signature database: one agent item returns the plain-text database info through a
+          UserParameter, a JavaScript step turns it into JSON, and the individual fields -
+          build time, version, signature count and the result of the signature verification -
+          are pulled out of it by dependent items.
+        - Daemons: proc.num counts the clamd and freshclam processes.
+        - Scan log: active log items read the file the scheduled scan appends to - one
+          "FOUND" line per infected file, and the SCAN SUMMARY block of every finished scan
+          (infected files, scanned files, duration).
+
+        ## Requirements
+
+        Zabbix version: 7.0 and higher.
+        A UserParameter named `clamav.status` on the monitored host (the shipped clamav.conf).
+        Passive checks (an agent interface on the host) for the database and the daemons, AND
+        active checks (ServerActive and Hostname in the agent configuration) for the scan log.
+        A scheduled scan that appends to the file in {$CLAMAV.SCAN.LOG}, readable by the zabbix
+        user.
+
+        ## Setup
+
+        1. Put the shipped `clamav.conf` into the agent's include directory
+           (zabbix_agentd.d or zabbix_agent2.d) and restart the agent. It defines the
+           `clamav.status` UserParameter, which prints `sigtool --info` of the daily database -
+           daily.cld when freshclam has already switched to the incremental file, daily.cvd
+           otherwise. Step-by-step commands are in the README next to this template.
+
+        2. The agent has to be able to read that file. On most distributions the zabbix user
+           is not in the clamav group, so either add it or relax the permissions.
+
+        3. Create the scan log readable by the zabbix user and schedule the scan that appends
+           to it; the README has the commands. Without a scan log the scan items stay empty
+           and the scan log no-data trigger fires.
+
+        4. Link the template to the host. The host needs a Zabbix agent interface, because the
+           database and process items are passive agent checks, and active checks for the log
+           items.
+
+        5. Review {$CLAMAV.UPDATE.WARN} (3d), {$CLAMAV.UPDATE.HIGH} (7d), {$CLAMAV.NODATA} (3h),
+           {$CLAMAV.SCAN.NODATA} (2d) and {$CLAMAV.INFECTED.PERIOD} (1d). Set
+           {$CLAMAV.CLAMD.PROC.MIN} or {$CLAMAV.FRESHCLAM.PROC.MIN} to 0 on a host that does not
+           run that daemon.
+
+        ## Notes
+
+        Scan log lines the log items look for, as clamscan and clamdscan write them:
+
+            /home/user/eicar.com: Eicar-Test-Signature FOUND
+            ----------- SCAN SUMMARY -----------
+            Scanned files: 2
+            Infected files: 1
+            Time: 4.818 sec (0 m 4 s)
+
+        The log items use "skip": lines already in the file when the item is created are
+        ignored, so the scan items fill in with the next finished scan.
+
+        Expected input - the parser only looks at lines shaped as "key: value":
+
+            File: daily.cvd
+            Build time: 22 Jan 2026 07:25 +0000
+            Version: 27500
+            Signatures: 2050000
+            Functionality level: 90
+            Builder: raynman
+            Verification OK.
+
+        The last line has no colon, which is why a STR_REPLACE step puts one there before the
+        JavaScript runs.
+
+        Every "key: value" line ends up in the JSON, so a field that no item uses today - File,
+        Functionality level, Builder, MD5, Digital signature - is still available for a new
+        dependent item without touching the collector.
+
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-1
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 4fc01f68e4f6468e873b5aecc48490ad
+          name: 'ClamAV: Database build time'
+          type: DEPENDENT
+          key: clamav.build.time
+          delay: '0'
+          units: unixtime
+          description: |
+            When the installed signature database was built by ClamAV - not when it was
+            downloaded.
+
+            This is what the two staleness triggers watch. A database that stops advancing
+            means freshclam is no longer updating, even though clamd itself keeps running
+            happily.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Build time"]'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+          triggers:
+            - uuid: ac6dda9ed410434f82e2e755839dabe1
+              expression: 'now() - last(/ClamAV by Zabbix agent/clamav.build.time) > {$CLAMAV.UPDATE.HIGH}'
+              name: 'ClamAV: Signature database is older than {$CLAMAV.UPDATE.HIGH}'
+              priority: HIGH
+              description: |
+                The signature database has not been rebuilt for {$CLAMAV.UPDATE.HIGH}. At this
+                age the scanner is missing more than a week of signatures.
+
+                The warning trigger depends on this one, so only this problem is shown once
+                the database is this old.
+
+                Build time: {ITEM.VALUE}
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: security
+            - uuid: 487f6b4a42a748d1b6a99b4dfdef03fd
+              expression: 'now() - last(/ClamAV by Zabbix agent/clamav.build.time) > {$CLAMAV.UPDATE.WARN}'
+              name: 'ClamAV: Signature database is older than {$CLAMAV.UPDATE.WARN}'
+              priority: WARNING
+              description: |
+                The signature database has not been rebuilt for {$CLAMAV.UPDATE.WARN}.
+
+                ClamAV normally publishes daily, so this points at freshclam: a stopped
+                service, a blocked outbound connection to the mirrors, or a full disk.
+
+                Build time: {ITEM.VALUE}
+              manual_close: 'YES'
+              dependencies:
+                - name: 'ClamAV: Signature database is older than {$CLAMAV.UPDATE.HIGH}'
+                  expression: 'now() - last(/ClamAV by Zabbix agent/clamav.build.time) > {$CLAMAV.UPDATE.HIGH}'
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: b22b6c3cffca40219a036dfa69b0a138
+          name: 'ClamAV: Signatures'
+          type: DEPENDENT
+          key: clamav.signatures
+          delay: '0'
+          units: '!'
+          description: |
+            Number of signatures in the database.
+
+            The unit is "!" so that Zabbix prints 2050000 instead of 2.05M - a signature count
+            is not a quantity that benefits from a prefix.
+
+            No trigger watches this item today, although a sudden drop is a good indicator of
+            a truncated or replaced database.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Signatures"]'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+        - uuid: 2dea09861695481086c22e647687e21f
+          name: 'ClamAV: Database info RAW'
+          key: clamav.status
+          delay: '{$CLAMAV.INTERVAL}'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: |
+            Plain-text output of the ClamAV database info command, converted to JSON.
+
+            Master item of the whole template. Requires the clamav.status UserParameter on the
+            agent, see the template description.
+
+            Two preprocessing steps run here:
+
+            - STR_REPLACE turns the "Verification OK." line into "Verification: OK." so that it
+              has the same shape as every other line.
+            - The JavaScript splits each line on the first ": ", converts numeric values to
+              numbers and rewrites "Build time" from "22 Jan 2026 07:25 +0000" into Unix time.
+
+            It fails with a readable message when the command returns nothing, and it drops
+            an unreadable "Build time" instead of failing, so that the remaining fields still
+            reach their items.
+
+            History is off - nothing reads it, the dependent items are fed from the incoming
+            value. For the same reason no trigger can be attached here: values of an item with
+            history 0 never reach the value cache, so nodata() would report a permanent
+            outage.
+          preprocessing:
+            - type: STR_REPLACE
+              parameters:
+                - Verification
+                - 'Verification:'
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  function parseBuildTime(dateStr) {
+                      // "22 Jan 2026 07:25 +0000" -> unixtime. Returns null when that fails, so that
+                      // one broken line does not take the whole item down.
+                      if (dateStr === undefined || dateStr === null) {
+                          return null;
+                      }
+
+                      var months = {
+                          "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
+                          "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
+                      };
+
+                      var parts = String(dateStr).replace(/\s+/g, ' ').trim().split(' ');
+                      if (parts.length < 4) {
+                          return null;
+                      }
+
+                      var day = parseInt(parts[0], 10);
+                      var month = months[parts[1]];
+                      var year = parseInt(parts[2], 10);
+
+                      var timeParts = parts[3].split(':');
+                      var hours = parseInt(timeParts[0], 10);
+                      var minutes = parseInt(timeParts[1], 10);
+                      var seconds = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
+
+                      if (month === undefined || isNaN(day) || isNaN(year) || isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
+                          return null;
+                      }
+
+                      // Offset from UTC; sigtool writes +0000. Missing or unreadable means UTC.
+                      var offset = 0;
+                      if (parts.length > 4) {
+                          var tz = /^([+-])(\d{2})(\d{2})$/.exec(parts[4]);
+                          if (tz !== null) {
+                              offset = (tz[1] === '-' ? -1 : 1) * (Number(tz[2]) * 3600 + Number(tz[3]) * 60);
+                          }
+                      }
+
+                      return Math.floor(Date.UTC(year, month, day, hours, minutes, seconds) / 1000) - offset;
+                  }
+
+                  function kvToJson(text) {
+                      var obj = {};
+                      var lines = String(text).split(/\r?\n/);
+
+                      for (var i = 0; i < lines.length; i++) {
+                          var line = lines[i].trim();
+                          if (line.length === 0) {
+                              continue;
+                          }
+
+                          // Split on the FIRST ": " only - the value may contain a colon itself.
+                          var sep = line.indexOf(': ');
+                          if (sep < 1) {
+                              continue;
+                          }
+
+                          var key = line.substring(0, sep).trim();
+                          var value = line.substring(sep + 2).trim();
+
+                          // Numeric values become Number; an empty string is not a number.
+                          if (value !== '' && !isNaN(value)) {
+                              value = Number(value);
+                          }
+
+                          obj[key] = value;
+                      }
+
+                      if (Object.keys(obj).length === 0) {
+                          throw 'ClamAV database info is empty or has no "key: value" lines. Check the clamav.status ' +
+                              'UserParameter and that the agent can read the signature database.';
+                      }
+
+                      var buildTime = parseBuildTime(obj["Build time"]);
+
+                      if (buildTime === null) {
+                          // The date is missing or unreadable - drop it and let the other fields through.
+                          delete obj["Build time"];
+                      }
+                      else {
+                          obj["Build time"] = buildTime;
+                      }
+
+                      return JSON.stringify(obj);
+                  }
+
+                  return kvToJson(value);
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 4c76761f9a1c4f46b2f0bb9e37e054fe
+          name: 'ClamAV: Database verification'
+          type: DEPENDENT
+          key: clamav.verification
+          delay: '0'
+          trends: '0'
+          description: |
+            Result of the digital signature check of the database, shown through the
+            "0 OK, 1 Fail" value map.
+
+            The JavaScript compares the raw text against "OK." exactly - anything else,
+            an empty value included, is reported as FAIL.
+
+            A failed verification means the database cannot be trusted, which the trigger on
+            this item reports.
+          valuemap:
+            name: '0 OK, 1 Fail'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Verification"]'
+            - type: JAVASCRIPT
+              parameters:
+                - 'if ( value == "OK." ) { return "0"} else {return "1"};'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+          triggers:
+            - uuid: 4c7252c86ae243e99e06103c2a368bd2
+              expression: 'last(/ClamAV by Zabbix agent/clamav.verification)=1'
+              name: 'ClamAV: Signature database failed verification'
+              priority: HIGH
+              description: |
+                The digital signature of the signature database did not verify, so ClamAV
+                cannot trust the database it is scanning with.
+
+                Usual causes: a truncated or corrupted download, a database file that was
+                edited or replaced by hand, or a disk problem. Let freshclam fetch the
+                database again - stop clamav-freshclam, delete the database file and start it
+                back up.
+
+                Anything other than the literal "OK." reported by the tool ends up here,
+                including an empty value.
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: d6550f75294042f38c687bc7c699d016
+          name: 'ClamAV: Database version'
+          type: DEPENDENT
+          key: clamav.version
+          delay: '0'
+          units: '!'
+          description: |
+            Version number of the signature database as published by ClamAV. It goes up with
+            every rebuild, so it moves together with "ClamAV: Database build time".
+
+            This is not the version of the clamd binary.
+
+            The unit is "!" to keep Zabbix from displaying 27500 as 27.5K.
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$["Version"]'
+          master_item:
+            key: clamav.status
+          tags:
+            - tag: component
+              value: clamav
+          triggers:
+            - uuid: 89e982588e694e37b53540e3b6dfb26d
+              expression: 'nodata(/ClamAV by Zabbix agent/clamav.version,{$CLAMAV.NODATA})=1'
+              name: 'ClamAV: No data collected for {$CLAMAV.NODATA}'
+              priority: WARNING
+              description: |
+                The database info has not arrived for {$CLAMAV.NODATA}, so the freshness and
+                verification triggers are blind.
+
+                Usual causes: the clamav.status UserParameter is missing or the agent was not
+                restarted after adding it, sigtool is not installed, the zabbix user cannot read
+                the signature database, or the agent is unreachable.
+
+                The trigger sits on a dependent item on purpose: the master item keeps no
+                history, so nodata() could never see its values.
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: f4c3cb6fc6f64710960d5743065f5be7
+          name: 'ClamAV: Infected files detected'
+          type: ZABBIX_ACTIVE
+          key: 'log.count[{$CLAMAV.SCAN.LOG}," FOUND$",,,skip]'
+          description: |
+            Number of "FOUND" lines appended to the scan log since the previous check - one line
+            per infected file, written by clamscan, clamdscan and clamd alike.
+
+            Active check: the agent reads the file itself and reports a count every minute, 0
+            included, which is why the no-data trigger of the scan log sits on this item.
+
+            "skip" means that lines already in the file when the item is created are ignored,
+            so an old detection does not become a new problem.
+          tags:
+            - tag: component
+              value: scan
+          triggers:
+            - uuid: 07dfd9e31eb84790a9f3fd60ef6dc1f5
+              expression: 'sum(/ClamAV by Zabbix agent/log.count[{$CLAMAV.SCAN.LOG}," FOUND$",,,skip],{$CLAMAV.INFECTED.PERIOD})>0'
+              name: 'ClamAV: Infected files detected in the last {$CLAMAV.INFECTED.PERIOD}'
+              priority: HIGH
+              description: |
+                At least one infected file was written to the scan log in the last
+                {$CLAMAV.INFECTED.PERIOD}. The file names and the signatures that matched are in
+                the item "ClamAV: Detections".
+
+                The problem stays open for {$CLAMAV.INFECTED.PERIOD} after the last detection -
+                a scheduled scan that finds the same file again keeps it open. Acknowledge to
+                close the problem manually once the file is removed.
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: security
+            - uuid: 76ab05d8a52440a6a4a329f75e78257d
+              expression: 'nodata(/ClamAV by Zabbix agent/log.count[{$CLAMAV.SCAN.LOG}," FOUND$",,,skip],{$CLAMAV.NODATA})=1'
+              name: 'ClamAV: No data from the scan log for {$CLAMAV.NODATA}'
+              priority: WARNING
+              description: |
+                The agent has not reported from the scan log for {$CLAMAV.NODATA}, so the
+                detection and scan triggers are blind.
+
+                Usual causes: the file in {$CLAMAV.SCAN.LOG} does not exist or the zabbix user
+                cannot read it (create it with the command from the README), active checks are
+                not configured (ServerActive and Hostname in the agent configuration, Hostname
+                equal to the host name in Zabbix), or the agent is unreachable.
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: d7bf43adb63d40c78a95dc9687339247
+          name: 'ClamAV: Detections'
+          type: ZABBIX_ACTIVE
+          key: 'log[{$CLAMAV.SCAN.LOG}," FOUND$",,,skip]'
+          value_type: LOG
+          trends: '0'
+          description: |
+            The "FOUND" lines of the scan log as they are written - the path of the infected
+            file and the signature that matched, for example
+            "/home/user/eicar.com: Eicar-Test-Signature FOUND".
+
+            Active check. This is where to look when "ClamAV: Infected files detected" fires.
+          tags:
+            - tag: component
+              value: scan
+        - uuid: 70829d25281f4e5c87049dea6fb919e9
+          name: 'ClamAV: Last scan: Infected files'
+          type: ZABBIX_ACTIVE
+          key: 'log[{$CLAMAV.SCAN.LOG},"^Infected files: ([0-9]+)",,,skip,\1]'
+          description: |
+            "Infected files" from the SCAN SUMMARY block that clamscan and clamdscan append to
+            the log when a scan finishes. One value per scan, so the time of the last value is
+            the time the last scan finished.
+
+            Active check. The no-scan trigger sits on this item: no new summary for
+            {$CLAMAV.SCAN.NODATA} means the scheduled scan is not running.
+          tags:
+            - tag: component
+              value: scan
+          triggers:
+            - uuid: 9acdef11c5a2429cbbdbede651cf6d4a
+              expression: 'nodata(/ClamAV by Zabbix agent/log[{$CLAMAV.SCAN.LOG},"^Infected files: ([0-9]+)",,,skip,\1],{$CLAMAV.SCAN.NODATA})=1'
+              name: 'ClamAV: No scan finished for {$CLAMAV.SCAN.NODATA}'
+              priority: WARNING
+              description: |
+                No SCAN SUMMARY was appended to the scan log for {$CLAMAV.SCAN.NODATA}, so the
+                scheduled scan did not run or did not finish.
+
+                Usual causes: the cron job is missing or disabled, the scan writes its log
+                somewhere else than {$CLAMAV.SCAN.LOG}, or the scan takes longer than
+                {$CLAMAV.SCAN.NODATA}. Hosts that only use clamd through another application
+                (a mail gateway) and never run a scheduled scan can disable this trigger.
+              dependencies:
+                - name: 'ClamAV: No data from the scan log for {$CLAMAV.NODATA}'
+                  expression: 'nodata(/ClamAV by Zabbix agent/log.count[{$CLAMAV.SCAN.LOG}," FOUND$",,,skip],{$CLAMAV.NODATA})=1'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 1632520bd71c4347803527c8d3c328d2
+          name: 'ClamAV: Last scan: Scanned files'
+          type: ZABBIX_ACTIVE
+          key: 'log[{$CLAMAV.SCAN.LOG},"^Scanned files: ([0-9]+)",,,skip,\1]'
+          description: |
+            "Scanned files" from the SCAN SUMMARY block of the last finished scan.
+
+            Only clamscan prints this line; a scan done with clamdscan leaves the item without
+            values.
+
+            Active check.
+          tags:
+            - tag: component
+              value: scan
+        - uuid: 80abf49495df47779758966531df0672
+          name: 'ClamAV: Last scan: Duration'
+          type: ZABBIX_ACTIVE
+          key: 'log[{$CLAMAV.SCAN.LOG},"^Time: ([0-9.]+) sec",,,skip,\1]'
+          value_type: FLOAT
+          units: s
+          description: |
+            "Time" from the SCAN SUMMARY block of the last finished scan - how long the scan ran.
+
+            Active check. Growing durations mean more data to scan or a slower host; a duration
+            that comes close to {$CLAMAV.SCAN.NODATA} needs a larger window there.
+          tags:
+            - tag: component
+              value: scan
+        - uuid: 6154489e88654fbf83b461e165bc98b3
+          name: 'ClamAV: Number of running clamd processes'
+          key: 'proc.num[clamd]'
+          description: |
+            Number of clamd processes - the scanning daemon used by clamdscan, on-access
+            scanning and mail gateways.
+
+            Zero on a host that scans with clamscan only; set {$CLAMAV.CLAMD.PROC.MIN} to 0
+            there so that the trigger stays quiet.
+          tags:
+            - tag: component
+              value: clamd
+          triggers:
+            - uuid: bcf91d51192247d1a80050465508b364
+              expression: 'last(/ClamAV by Zabbix agent/proc.num[clamd])<{$CLAMAV.CLAMD.PROC.MIN}'
+              name: 'ClamAV: clamd process is not running'
+              priority: HIGH
+              description: |
+                Fewer than {$CLAMAV.CLAMD.PROC.MIN} clamd processes are running, so nothing that
+                relies on the daemon - clamdscan, on-access scanning, a mail gateway - scans
+                anything.
+
+                Usual causes: the service was stopped or crashed, the signature database is
+                missing so the daemon refused to start (run freshclam once), or the daemon
+                failed to load the database for lack of memory. The service is clamav-daemon
+                on Debian and Ubuntu, clamd@scan on RHEL and its derivatives.
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: cd30e8d0469b46398626b8a4dbf9d894
+          name: 'ClamAV: Number of running freshclam processes'
+          key: 'proc.num[freshclam]'
+          description: |
+            Number of freshclam processes - the signature updater running as a daemon.
+
+            Zero on a host that updates from cron instead; set {$CLAMAV.FRESHCLAM.PROC.MIN} to 0
+            there so that the trigger stays quiet. The database age triggers still catch an
+            updater that does not update.
+          tags:
+            - tag: component
+              value: freshclam
+          triggers:
+            - uuid: 923c30f8d3784584b3d75e68c54bd138
+              expression: 'last(/ClamAV by Zabbix agent/proc.num[freshclam])<{$CLAMAV.FRESHCLAM.PROC.MIN}'
+              name: 'ClamAV: freshclam process is not running'
+              priority: AVERAGE
+              description: |
+                Fewer than {$CLAMAV.FRESHCLAM.PROC.MIN} freshclam processes are running, so the
+                signature database stops receiving updates. The database age triggers fire once
+                it is {$CLAMAV.UPDATE.WARN} old.
+
+                Usual causes: the service was stopped or crashed, or it exited after too many
+                failed downloads. The service is clamav-freshclam on Debian, Ubuntu and RHEL.
+              tags:
+                - tag: scope
+                  value: availability
+      tags:
+        - tag: class
+          value: software
+        - tag: target
+          value: clamav
+      macros:
+        - macro: '{$CLAMAV.CLAMD.PROC.MIN}'
+          value: '1'
+          description: |
+            Minimum number of running clamd processes before the trigger fires.
+
+            Set to 0 on a host that scans with clamscan only and does not run the daemon.
+        - macro: '{$CLAMAV.FRESHCLAM.PROC.MIN}'
+          value: '1'
+          description: |
+            Minimum number of running freshclam processes before the trigger fires.
+
+            Set to 0 on a host that runs freshclam from cron instead of as a daemon.
+        - macro: '{$CLAMAV.INFECTED.PERIOD}'
+          value: 1d
+          description: |
+            How long the "Infected files detected" problem stays open after the last FOUND line
+            in the scan log.
+
+            A scheduled scan that finds the same file again keeps the problem open.
+        - macro: '{$CLAMAV.INTERVAL}'
+          value: 1h
+          description: |
+            How often the database info is read.
+
+            ClamAV rebuilds the database a few times a day at most, so there is nothing to
+            gain from a shorter interval - and every check starts a process on the host.
+        - macro: '{$CLAMAV.NODATA}'
+          value: 3h
+          description: |
+            How long the database info may be missing before the no-data trigger fires.
+
+            Keep it at a few multiples of {$CLAMAV.INTERVAL}. The same window covers the scan
+            log items, which report every minute.
+        - macro: '{$CLAMAV.SCAN.LOG}'
+          value: /var/log/clamav/scan.log
+          description: |
+            The log file the scheduled scan appends to (clamscan or clamdscan with --log), read
+            by the active log items.
+
+            The zabbix user has to be able to read it; the README shows how to create it. A
+            host that uses clamd through another application can point this at the clamd log
+            instead - the FOUND lines are the same there, only the scan summary items stay
+            empty.
+        - macro: '{$CLAMAV.SCAN.NODATA}'
+          value: 2d
+          description: |
+            How long the scan log may go without a finished scan before the no-scan trigger
+            fires.
+
+            Keep it above the interval of the scheduled scan: 2d for a daily scan, 8d for a
+            weekly one.
+        - macro: '{$CLAMAV.UPDATE.HIGH}'
+          value: 7d
+          description: |
+            Age of the signature database at which the HIGH trigger fires.
+
+            Should be larger than {$CLAMAV.UPDATE.WARN}. Zabbix time suffixes are accepted, so
+            7d, 168h and 604800 all mean the same thing.
+        - macro: '{$CLAMAV.UPDATE.WARN}'
+          value: 3d
+          description: |
+            Age of the signature database at which the WARNING trigger fires.
+
+            Zabbix time suffixes are accepted, so 3d, 72h and 259200 all mean the same thing.
+      valuemaps:
+        - uuid: b8fc2a30c2274f0984fe71599f567780
+          name: '0 OK, 1 Fail'
+          mappings:
+            - value: '0'
+              newvalue: OK
+            - value: '1'
+              newvalue: FAIL

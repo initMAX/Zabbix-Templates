@@ -1,0 +1,110 @@
+zabbix_export:
+  version: '5.4'
+  date: '2022-11-03T11:31:12Z'
+  groups:
+    -
+      uuid: 24c714ccb3854346b52bfe17e287d210
+      name: Followers
+  templates:
+    -
+      uuid: d251c0f0a4604126bab6c8f8f444f911
+      template: 'LinkedIn followers - InitMAX'
+      name: 'LinkedIn followers - InitMAX'
+      description: |
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      groups:
+        -
+          name: Followers
+      items:
+        -
+          uuid: 947b44dba4f24301be54d9e79ee7b8fd
+          name: 'LinkedIn: {$LINKEDIN.COMPANY.NAME} page followers count'
+          type: SCRIPT
+          key: 'linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}]'
+          delay: 5m
+          params: |
+            params = JSON.parse(value)
+            
+            var request = new HttpRequest();
+            return request.get("https://www.linkedin.com/pages-extensions/FollowCompany?id=" + params.companyId + "&counter=bottom");
+          preprocessing:
+            -
+              type: REGEX
+              parameters:
+                - 'follower-count">(\S+)<'
+                - \1
+            -
+              type: STR_REPLACE
+              parameters:
+                - ','
+                - ''
+          parameters:
+            -
+              name: companyId
+              value: '{$LINKEDIN.COMPANY.ID}'
+          tags:
+            -
+              tag: Application
+              value: 'LinkedIn followers'
+          triggers:
+            -
+              uuid: 78ec414486d0411baa6ade37e26b3898
+              expression: 'last(/LinkedIn followers - InitMAX/linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}])<last(/LinkedIn followers - InitMAX/linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}],#2)'
+              recovery_mode: NONE
+              name: '{$LINKEDIN.COMPANY.NAME} has lost follower on LinkedIn!'
+              priority: WARNING
+              manual_close: 'YES'
+            -
+              uuid: 48197f8c98664107bd68ddfaac000063
+              expression: 'count(/LinkedIn followers - InitMAX/linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}],{$LINKEDIN.COMPANY.M.GRACE},,"{$LINKEDIN.COMPANY.M1}")>0'
+              name: '{$LINKEDIN.COMPANY.NAME} has reached {$LINKEDIN.COMPANY.M1} followers on LinkedIn!'
+              url: '{$LINKEDIN.COMPANY.URL}'
+              priority: INFO
+              manual_close: 'YES'
+            -
+              uuid: a53c69a4f33642cb83348c0646fdf646
+              expression: 'count(/LinkedIn followers - InitMAX/linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}],{$LINKEDIN.COMPANY.M.GRACE},,"{$LINKEDIN.COMPANY.M2}")>0'
+              name: '{$LINKEDIN.COMPANY.NAME} has reached {$LINKEDIN.COMPANY.M2} followers on LinkedIn!'
+              url: '{$LINKEDIN.COMPANY.URL}'
+              priority: INFO
+              manual_close: 'YES'
+            -
+              uuid: b4592e98441e492886de6f58f5418e3f
+              expression: 'count(/LinkedIn followers - InitMAX/linkedin.follower.count.[{$LINKEDIN.COMPANY.NAME}],{$LINKEDIN.COMPANY.M.GRACE},,"{$LINKEDIN.COMPANY.M3}")>0'
+              name: '{$LINKEDIN.COMPANY.NAME} has reached {$LINKEDIN.COMPANY.M3} followers on LinkedIn!'
+              url: '{$LINKEDIN.COMPANY.URL}'
+              priority: INFO
+              manual_close: 'YES'
+      macros:
+        -
+          macro: '{$LINKEDIN.COMPANY.ID}'
+          value: '76503092'
+          description: 'Company ID'
+        -
+          macro: '{$LINKEDIN.COMPANY.M.GRACE}'
+          value: 1h
+          description: 'Milestone Grace Time'
+        -
+          macro: '{$LINKEDIN.COMPANY.M1}'
+          value: '100'
+          description: 'First Milestone'
+        -
+          macro: '{$LINKEDIN.COMPANY.M2}'
+          value: '500'
+          description: 'Second Milestone'
+        -
+          macro: '{$LINKEDIN.COMPANY.M3}'
+          value: '1000'
+          description: 'Third Milestone'
+        -
+          macro: '{$LINKEDIN.COMPANY.NAME}'
+          value: initMAX
+          description: 'Company Nane'
+        -
+          macro: '{$LINKEDIN.COMPANY.URL}'
+          value: 'https://www.linkedin.com/company/initmax'
+          description: 'Company URL'

@@ -1,0 +1,219 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 34e5efe39b194cba97406eb3f25028a6
+      template: 'SSL Grade'
+      name: 'SSL Grade'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 3e1eea807022423fbe34760af1e3000d
+          name: 'HTTPS Service is running'
+          type: SIMPLE
+          key: 'net.tcp.service[https,{$GRADE.DOMAIN},{$GRADE.PORT}]'
+          history: 7d
+          trends: 90d
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: Application
+              value: 'SSL Service'
+          triggers:
+            - uuid: 0a0cbaa41f8e41a8a76641eb9088ad95
+              expression: 'max(/SSL Grade/net.tcp.service[https,{$GRADE.DOMAIN},{$GRADE.PORT}],#3)=0'
+              name: 'HTTPS Service is Down'
+              priority: WARNING
+        - uuid: 50c6e679788b4466af62fddd3d1755dd
+          name: 'Certificate Grade'
+          type: SCRIPT
+          key: sslabs.grade
+          delay: 8h
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          params: |
+            /* ------------------------------------------------------------------ *
+             *  SSL Labs grade check for Zabbix 7.0 – with auto‑registration      *
+             * ------------------------------------------------------------------ *
+             *  PARAMETERS (set in the item GUI)                                  *
+             *     domain – FQDN you want to test   (e.g. www.initmax.cz)         *
+             *     port   – optional TCP port       (allowed: 443 / 8443 / 10443) *
+             *     email  – corporate e‑mail address used for the SSL Labs API    *
+             *                                                                    *
+             *  HOW IT WORKS                                                      *
+             *    1) ensureRegistered()                                           *
+             *         – POSTs /register every time; API ignores duplicates       *
+             *    2) runScan()                                                    *
+             *         – starts a fresh scan (startNew=on)                        *
+             *         – polls every 10 s until status === "READY"                *
+             *         – returns endpoints[0].grade ("A+", "B", …)                *
+             * ------------------------------------------------------------------ */
+            
+            var params = JSON.parse(value);
+            var DOMAIN = (params.domain || '').trim();      // required
+            var PORT   = (params.port   || '').trim();      // optional
+            var EMAIL  = (params.email  || '').trim();      // required
+            
+            if (!DOMAIN || !EMAIL)
+                throw 'Required parameter missing: domain or email';
+            
+            /* Public SSL Labs API accepts only these ports */
+            var ALLOWED_PORTS = { '':1, '443':1, '8443':1, '10443':1 };
+            if (!(PORT in ALLOWED_PORTS))
+                throw 'Port ' + PORT + ' is not supported by public SSL Labs API';
+            
+            /* Build host for API: add port only when it’s non‑default 443 */
+            var HOST = (PORT && PORT !== '443') ? DOMAIN + ':' + PORT : DOMAIN;
+            
+            var API  = 'https://api.ssllabs.com/api/v4';
+            var http = new HttpRequest();
+            http.addHeader('email: ' + EMAIL);
+            
+            /* -------- 1 · always (re)register e‑mail -------------------------- */
+            function ensureRegistered() {
+                Zabbix.log(4, 'SSL Labs: sending /register for ' + EMAIL);
+            
+                var reg = new HttpRequest();
+                reg.addHeader('Content-Type: application/json');
+            
+                var body = JSON.stringify({
+                    firstName:    'Zabbix',
+                    lastName:     'Auto',
+                    email:        EMAIL,
+                    organization: 'ZabbixMonitor'
+                });
+            
+                var resp = reg.post(API + '/register', body);
+            
+                /* Any error other than “already registered” is fatal */
+                if (resp.indexOf('"errors":') !== -1 &&
+                    resp.indexOf('already registered') === -1)
+                    throw 'SSL Labs /register failed: ' + resp;
+            }
+            
+            /* -------- 2 · launch scan and poll until READY ------------------- */
+            function runScan() {
+                var js = JSON.parse(
+                    http.get(API + '/analyze?host=' + HOST + '&startNew=on&all=done')
+                );
+            
+                if (!js.status)
+                    throw 'Unexpected API response: ' + JSON.stringify(js);
+            
+                while (js.status === 'DNS' || js.status === 'IN_PROGRESS') {
+                    Zabbix.sleep(10);   // item timeout in GUI limits total time
+                    js = JSON.parse(
+                        http.get(API + '/analyze?host=' + HOST + '&all=done')
+                    );
+                    if (!js.status)
+                        throw 'API error: ' + JSON.stringify(js);
+                }
+            
+                if (js.status !== 'READY')
+                    throw 'SSL Labs ended with status=' + js.status;
+            
+                return js.endpoints[0].grade;   // e.g. "A+", "B" …
+            }
+            
+            /* ------------ main flow ----------------------------------------- */
+            ensureRegistered();
+            return runScan();
+          timeout: 5m
+          parameters:
+            - name: domain
+              value: '{$GRADE.DOMAIN}'
+            - name: email
+              value: '{$GRADE.EMAIL}'
+            - name: port
+              value: '{$GRADE.PORT}'
+          tags:
+            - tag: Application
+              value: 'SSL Grade'
+          triggers:
+            - uuid: 792d4055c5d94c8896e97ff6e2d6bdd9
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","A")=1'
+              name: 'Certificate grade is A'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is A'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              status: DISABLED
+              priority: INFO
+              description: "Opens the public SSL\_Labs result for this host."
+            - uuid: 7cb2bfb0d777490c968e349fbcfce65c
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","A+")=1'
+              name: 'Certificate grade is A+'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is A+'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              status: DISABLED
+              priority: INFO
+              description: "Opens the public SSL\_Labs result for this host."
+            - uuid: 3378cc740f3f477bb5a976c7abd9f93e
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","B")=1'
+              name: 'Certificate grade is B'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is B'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              priority: WARNING
+              description: "Opens the public SSL\_Labs result for this host."
+            - uuid: acbc115b288b4cef939fa2c3ed0bcd94
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","C")=1'
+              name: 'Certificate grade is C'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is C'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              priority: WARNING
+              description: "Opens the public SSL\_Labs result for this host."
+            - uuid: 61ae380053374839b9ec441eb6522b08
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","D")=1'
+              name: 'Certificate grade is D'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is D'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              priority: AVERAGE
+              description: "Opens the public SSL\_Labs result for this host."
+            - uuid: 938ede92ba1c478cb720fd61d3d07e3c
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","E")=1'
+              name: 'Certificate grade is E'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is E'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              priority: HIGH
+              description: "Opens the public SSL\_Labs result for this host."
+            - uuid: 8743a1f405df45e4b85748aff36c890c
+              expression: 'find(/SSL Grade/sslabs.grade,,"like","F")=1'
+              name: 'Certificate grade is F'
+              event_name: 'Certificate for domain: {$GRADE.DOMAIN} grade is F'
+              url_name: "View SSL\_Labs report"
+              url: 'https://www.ssllabs.com/ssltest/analyze.html?d={$GRADE.DOMAIN}%3A{$GRADE.PORT}&latest'
+              priority: DISASTER
+              description: "Opens the public SSL\_Labs result for this host."
+      macros:
+        - macro: '{$GRADE.DOMAIN}'
+          value: '<FQDN_TO_TEST>'
+          description: "Fully‑qualified domain name that will be sent to the SSL\_Labs API (e.g. www.initmax.com)."
+        - macro: '{$GRADE.EMAIL}'
+          value: '<EMAIL_FOR_SSL_LABS>'
+          description: 'Corporate e‑mail address used by the API. If this address has never been used before, the script will automatically register it with /register the first time it runs.'
+        - macro: '{$GRADE.PORT}'
+          value: '443'
+          description: "Leave empty for the default HTTPS port 443. Because of SSL\_Labs API limitations, only ports 8443 and 10443 are accepted as non‑standard alternatives; any other value will be rejected."
+      valuemaps:
+        - uuid: 51dab0baf6cf456091445af5c7a50e30
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up

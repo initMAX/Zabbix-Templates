@@ -1,0 +1,1402 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: a5fb658a285841b68164f5ba76afb72c
+      template: 'Ubiquiti Unifi UAP Access Point SNMP'
+      name: 'Ubiquiti Unifi UAP Access Point SNMP'
+      description: |
+        Zabbix template for Ubiquiti Unifi Access Points:
+        - U6-Pro, U6-Lite, U6-LR, U6-Mesh, U6-Enterprise
+        - UAP-AC-Pro, UAP-AC-Lite, UAP-AC-LR
+        - UAP-nanoHD, UAP-FlexHD
+        
+        Monitors via SNMP v2c using UBNT-UniFi-MIB, FROGFOOT-RESOURCES-MIB and standard MIBs.
+        
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: b6849a9c33af4b3fa35b98e67887a6a6
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: icmpping
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: eff4f8fdc9b4400d9242574c1a3f0c33
+              expression: 'max(/Ubiquiti Unifi UAP Access Point SNMP/icmpping,#3)=0'
+              name: 'Unifi AP: Unavailable by ICMP ping'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: c89b22ae55c74c5690bad2fb3344b1d2
+          name: 'ICMP loss'
+          type: SIMPLE
+          key: icmppingloss
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 3c60c799c9bb4c85a6087a6434c9f357
+              expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/Ubiquiti Unifi UAP Access Point SNMP/icmppingloss,5m)<100'
+              name: 'Unifi AP: High ICMP ping loss'
+              event_name: 'Unifi AP: High ICMP ping loss (>{$ICMP_LOSS_WARN}%)'
+              opdata: 'Loss: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Unifi AP: Unavailable by ICMP ping'
+                  expression: 'max(/Ubiquiti Unifi UAP Access Point SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: cd9456e2582a4fcfb9be42630c20cde9
+          name: 'ICMP response time'
+          type: SIMPLE
+          key: icmppingsec
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: a861df35099d4e57b0cca65b3a7f0da1
+              expression: 'avg(/Ubiquiti Unifi UAP Access Point SNMP/icmppingsec,5m)>{$ICMP_RESPONSE_TIME_WARN}'
+              name: 'Unifi AP: High ICMP ping response time'
+              event_name: 'Unifi AP: High ICMP ping response time (>{$ICMP_RESPONSE_TIME_WARN}s)'
+              opdata: 'Value: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Unifi AP: High ICMP ping loss'
+                  expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/Ubiquiti Unifi UAP Access Point SNMP/icmppingloss,5m)<100'
+                - name: 'Unifi AP: Unavailable by ICMP ping'
+                  expression: 'max(/Ubiquiti Unifi UAP Access Point SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+                - tag: scope
+                  value: performance
+        - uuid: ac9f3be8761446cb8ced79c04f5b4bfd
+          name: 'Unifi AP: SNMP walk network interfaces'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.2.2.1.8,1.3.6.1.2.1.2.2.1.7,1.3.6.1.2.1.31.1.1.1.18,1.3.6.1.2.1.31.1.1.1.1,1.3.6.1.2.1.2.2.1.2,1.3.6.1.2.1.2.2.1.3,1.3.6.1.2.1.31.1.1.1.6,1.3.6.1.2.1.31.1.1.1.10,1.3.6.1.2.1.2.2.1.14,1.3.6.1.2.1.2.2.1.20,1.3.6.1.2.1.2.2.1.19,1.3.6.1.2.1.2.2.1.13,1.3.6.1.2.1.31.1.1.1.15]'
+          key: net.if.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of IF-MIB for network interface discovery and monitoring.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: 618724b3d8904edebe7f7ac97440cd30
+          name: 'System contact details'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.4.0]'
+          key: 'system.contact[sysContact.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysContact.0'
+          inventory_link: CONTACT
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 07c2df8a0975491996c66b79953849e8
+          name: 'CPU utilization (5 min avg)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.4.2.1.3.2]'
+          key: system.cpu.util
+          value_type: FLOAT
+          units: '%'
+          description: 'CPU load average over last 5 minutes (enterprises.10002)'
+          tags:
+            - tag: component
+              value: cpu
+          triggers:
+            - uuid: 3bda566561f24f0f982d919e3d8e6450
+              expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/system.cpu.util,5m)>{$CPU.UTIL.CRIT}'
+              name: 'Unifi AP: High CPU utilization'
+              event_name: 'Unifi AP: High CPU utilization (over {$CPU.UTIL.CRIT}% for 5m)'
+              opdata: 'Current utilization: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: ddb2d9e0eae14fba8e2cca84f44ad961
+          name: 'CPU utilization (1 min avg)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.4.2.1.3.1]'
+          key: system.cpu.util.1min
+          value_type: FLOAT
+          units: '%'
+          description: 'CPU load average over last 1 minute (enterprises.10002)'
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 3d845f61df774bc0b803be42b94e4f31
+          name: 'CPU utilization (15 min avg)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.4.2.1.3.3]'
+          key: system.cpu.util.15min
+          value_type: FLOAT
+          units: '%'
+          description: 'CPU load average over last 15 minutes (enterprises.10002)'
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: e8ebb2db367146d5b465756fc4066784
+          name: 'System description'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.1.0]'
+          key: 'system.descr[sysDescr.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysDescr.0'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 195b628dcfe743c3a3cd5d9236702285
+          name: 'AP IP address'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.41112.1.6.3.1.0]'
+          key: system.hw.ip
+          delay: 10m
+          value_type: CHAR
+          trends: '0'
+          description: 'UBNT-UniFi-MIB::unifiApSystemIp'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          tags:
+            - tag: component
+              value: system
+        - uuid: 8eb59e6e45da4186887a5e70174ddd0d
+          name: 'MAC address'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.41112.1.6.2.1.1.4.1]'
+          key: system.hw.mac
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'UBNT-UniFi-MIB::unifiIfMac - eth0 MAC address'
+          inventory_link: MACADDRESS_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 4a97449f1c08429987b8fce3df0bb662
+              expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/system.hw.mac,#1)<>last(/Ubiquiti Unifi UAP Access Point SNMP/system.hw.mac,#2) and length(last(/Ubiquiti Unifi UAP Access Point SNMP/system.hw.mac))>0'
+              name: 'Unifi AP: Device has been replaced'
+              event_name: 'Unifi AP: Device has been replaced (new MAC address received)'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 4da29cb6e9604057af72f3bdfb2a5ce1
+          name: 'Hardware model name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.41112.1.6.3.3.0]'
+          key: system.hw.model
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'UBNT-UniFi-MIB::unifiApSystemModel'
+          inventory_link: MODEL
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+        - uuid: 649cd2cf4be94551bf595395088f6572
+          name: 'Uptime (AP)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.41112.1.6.3.5.0]'
+          key: 'system.hw.uptime[unifiApSystemUptime.0]'
+          delay: 30s
+          value_type: FLOAT
+          trends: '0'
+          units: uptime
+          description: 'UBNT-UniFi-MIB::unifiApSystemUptime - AP uptime in seconds'
+          tags:
+            - tag: component
+              value: system
+        - uuid: 94e5fc2a7bae463997b80b7b8e9ab7f1
+          name: 'System location'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.6.0]'
+          key: 'system.location[sysLocation.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysLocation.0'
+          inventory_link: LOCATION
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: c9a07136e8c547df92907bf06e0820bf
+          name: 'System name'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.5.0]'
+          key: system.name
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysName.0'
+          inventory_link: NAME
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: bb3d81ec84a44bc7b85e992df3d675ca
+              expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/system.name,#1)<>last(/Ubiquiti Unifi UAP Access Point SNMP/system.name,#2) and length(last(/Ubiquiti Unifi UAP Access Point SNMP/system.name))>0'
+              name: 'Unifi AP: System name has changed'
+              event_name: 'Unifi AP: System name has changed (new name: {ITEM.VALUE})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 2a74c1e26413486a94bdc29e1c35d87a
+          name: 'Uptime (network)'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.3.0]'
+          key: 'system.net.uptime[sysUpTime.0]'
+          delay: 30s
+          value_type: FLOAT
+          trends: '0'
+          units: uptime
+          description: 'SNMPv2-MIB::sysUpTime.0 - SNMP uptime in centiseconds, converted to seconds'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: component
+              value: system
+        - uuid: d964a51700ea4be4bd141d1be0670b6b
+          name: 'System object ID'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.2.0]'
+          key: 'system.objectid[sysObjectID.0]'
+          delay: 15m
+          value_type: CHAR
+          trends: '0'
+          description: 'SNMPv2-MIB::sysObjectID.0'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 12h
+          tags:
+            - tag: component
+              value: system
+        - uuid: db697060739e4c0a82411c554e24c103
+          name: 'Firmware version'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.41112.1.6.3.6.0]'
+          key: system.sw.version
+          delay: 1h
+          value_type: CHAR
+          trends: '0'
+          description: 'UBNT-UniFi-MIB::unifiApSystemVersion'
+          inventory_link: SOFTWARE_APP_A
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: cf404d01b85a4ce195c0aed83cba3cb3
+              expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/system.sw.version,#1)<>last(/Ubiquiti Unifi UAP Access Point SNMP/system.sw.version,#2) and length(last(/Ubiquiti Unifi UAP Access Point SNMP/system.sw.version))>0'
+              name: 'Unifi AP: Firmware version has changed'
+              event_name: 'Unifi AP: Firmware version has changed (new version: {ITEM.VALUE})'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: edd1f02c7f2f4560a5dc70c6c1a92383
+          name: 'Unifi AP: SNMP walk radios'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.41112.1.6.1.1.1.2,1.3.6.1.4.1.41112.1.6.1.1.1.3,1.3.6.1.4.1.41112.1.6.1.1.1.4,1.3.6.1.4.1.41112.1.6.1.1.1.5,1.3.6.1.4.1.41112.1.6.1.1.1.6,1.3.6.1.4.1.41112.1.6.1.1.1.7,1.3.6.1.4.1.41112.1.6.1.1.1.8,1.3.6.1.4.1.41112.1.6.1.1.1.9]'
+          key: unifi.radio.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of UBNT-UniFi-MIB::unifiRadioTable for radio discovery and monitoring.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: a8ef0cdbe3e24450a13c58dcdf07b763
+          name: 'Unifi AP: SNMP walk VAPs'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.41112.1.6.1.2.1.4,1.3.6.1.4.1.41112.1.6.1.2.1.6,1.3.6.1.4.1.41112.1.6.1.2.1.7,1.3.6.1.4.1.41112.1.6.1.2.1.8,1.3.6.1.4.1.41112.1.6.1.2.1.9,1.3.6.1.4.1.41112.1.6.1.2.1.10,1.3.6.1.4.1.41112.1.6.1.2.1.11,1.3.6.1.4.1.41112.1.6.1.2.1.15,1.3.6.1.4.1.41112.1.6.1.2.1.16,1.3.6.1.4.1.41112.1.6.1.2.1.18,1.3.6.1.4.1.41112.1.6.1.2.1.19,1.3.6.1.4.1.41112.1.6.1.2.1.20,1.3.6.1.4.1.41112.1.6.1.2.1.21,1.3.6.1.4.1.41112.1.6.1.2.1.22,1.3.6.1.4.1.41112.1.6.1.2.1.23]'
+          key: unifi.vap.walk
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'SNMP walk of UBNT-UniFi-MIB::unifiVapTable for VAP/SSID discovery and monitoring.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: c8c0dd22c49d431a95503df4ff989876
+          name: 'Memory: Buffers'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.1.3.0]'
+          key: vm.memory.buffers
+          units: B
+          description: 'Buffer memory in KB (enterprises.10002), converted to bytes'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 37f4a841f75d4740bdbe530758feae48
+          name: 'Memory: Cached'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.1.4.0]'
+          key: vm.memory.cached
+          units: B
+          description: 'Cached memory in KB (enterprises.10002), converted to bytes'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 33a8ee97163845918df1daea08f787bf
+          name: 'Memory: Free'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.1.2.0]'
+          key: vm.memory.free
+          units: B
+          description: 'Free memory in KB (enterprises.10002), converted to bytes'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 90e6ce1b82d840a1a60589c30354f9d8
+          name: 'Memory: Total'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.10002.1.1.1.1.1.0]'
+          key: vm.memory.total
+          delay: 5m
+          units: B
+          description: 'Total memory in KB (enterprises.10002), converted to bytes'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          tags:
+            - tag: component
+              value: memory
+        - uuid: 3eae9458fd844528a693f6140b78c8bd
+          name: 'Memory: Utilization'
+          type: CALCULATED
+          key: vm.memory.util
+          value_type: FLOAT
+          units: '%'
+          params: '(last(//vm.memory.total) - last(//vm.memory.free) - last(//vm.memory.buffers) - last(//vm.memory.cached)) / last(//vm.memory.total) * 100'
+          description: 'Memory utilization: (total - free - buffers - cached) / total * 100'
+          tags:
+            - tag: component
+              value: memory
+          triggers:
+            - uuid: 19eea6058f5c4952acd154f203949036
+              expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/vm.memory.util,5m)>{$MEMORY.UTIL.MAX}'
+              name: 'Unifi AP: High memory utilization'
+              event_name: 'Unifi AP: High memory utilization (>{$MEMORY.UTIL.MAX}% for 5m)'
+              opdata: 'Current utilization: {ITEM.LASTVALUE1}'
+              priority: AVERAGE
+              tags:
+                - tag: scope
+                  value: capacity
+                - tag: scope
+                  value: performance
+        - uuid: 1c244b7e70344270b59bdecc85f8b0ab
+          name: 'SNMP agent availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          valuemap:
+            name: zabbix.host.available
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: b242426a03a8408faab282947dd67852
+              expression: 'max(/Ubiquiti Unifi UAP Access Point SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              name: 'Unifi AP: No SNMP data collection'
+              opdata: 'Current state: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Unifi AP: Unavailable by ICMP ping'
+                  expression: 'max(/Ubiquiti Unifi UAP Access Point SNMP/icmpping,#3)=0'
+              tags:
+                - tag: scope
+                  value: availability
+      discovery_rules:
+        - uuid: 2bfd08ae52a2443389d45836a2de9796
+          name: 'Network interfaces discovery'
+          type: DEPENDENT
+          key: net.if.discovery
+          delay: '0'
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#IFDESCR}'
+                value: '{$NET.IF.IFDESCR.MATCHES}'
+                formulaid: A
+              - macro: '{#IFDESCR}'
+                value: '{$NET.IF.IFDESCR.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+              - macro: '{#IFNAME}'
+                value: '{$NET.IF.IFNAME.MATCHES}'
+                formulaid: C
+              - macro: '{#IFNAME}'
+                value: '{$NET.IF.IFNAME.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: D
+          description: 'Discovering interfaces from IF-MIB.'
+          item_prototypes:
+            - uuid: e9ea298962c448dcab57fabb88421ecf
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets discarded'
+              type: DEPENDENT
+              key: 'net.if.in.discards[ifInDiscards.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifInDiscards'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.13.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 904578e035a6472cb9a270e24dde10e8
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets with errors'
+              type: DEPENDENT
+              key: 'net.if.in.errors[ifInErrors.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifInErrors'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: 78aa833390114e30859ada942f308748
+                  expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/net.if.in.errors[ifInErrors.{#SNMPINDEX}],5m)>{$IF.ERRORS.WARN}'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): High inbound error rate'
+                  event_name: 'Interface {#IFNAME}({#IFALIAS}): High inbound error rate (>{$IF.ERRORS.WARN} for 5m)'
+                  opdata: 'Errors: {ITEM.LASTVALUE1}'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                      expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                      recovery_expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: 454c71cc4dc84cdf962d4ce8b3362532
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits received'
+              type: DEPENDENT
+              key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              description: 'IF-MIB::ifHCInOctets - 64-bit input octet counter'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: a33edceaa8934957ae249e060df44875
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets discarded'
+              type: DEPENDENT
+              key: 'net.if.out.discards[ifOutDiscards.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifOutDiscards'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.19.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 92e22086eb1645feb6146dc42dfdab6c
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets with errors'
+              type: DEPENDENT
+              key: 'net.if.out.errors[ifOutErrors.{#SNMPINDEX}]'
+              delay: '0'
+              description: 'IF-MIB::ifOutErrors'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: e36dec0584b640978a8e6d3fcdd00750
+                  expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/net.if.out.errors[ifOutErrors.{#SNMPINDEX}],5m)>{$IF.ERRORS.WARN}'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): High outbound error rate'
+                  event_name: 'Interface {#IFNAME}({#IFALIAS}): High outbound error rate (>{$IF.ERRORS.WARN} for 5m)'
+                  opdata: 'Errors: {ITEM.LASTVALUE1}'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                      expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                      recovery_expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: 1332010b205d4400a2fe2dad85f052f5
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits sent'
+              type: DEPENDENT
+              key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              description: 'IF-MIB::ifHCOutOctets - 64-bit output octet counter'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 26ca44f2609f4a40a9cd5741b82afe9f
+              name: 'Interface {#IFNAME}({#IFALIAS}): Speed'
+              type: DEPENDENT
+              key: 'net.if.speed[ifHighSpeed.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              units: bps
+              description: 'IF-MIB::ifHighSpeed - interface speed in Mbps, converted to bps'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.31.1.1.1.15.{#SNMPINDEX}'
+                    - '0'
+                - type: MULTIPLIER
+                  parameters:
+                    - '1000000'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: 85461f06c8c84038b96e72981dec4325
+                  expression: 'change(/Ubiquiti Unifi UAP Access Point SNMP/net.if.speed[ifHighSpeed.{#SNMPINDEX}])<0 and last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.speed[ifHighSpeed.{#SNMPINDEX}])>0'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): Ethernet has changed to lower speed than expected'
+                  opdata: 'Current speed: {ITEM.LASTVALUE1}'
+                  priority: INFO
+                  manual_close: 'YES'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: 037b8e6f9f9440d18d6e042fb582d235
+              name: 'Interface {#IFNAME}({#IFALIAS}): Admin status'
+              type: DEPENDENT
+              key: 'net.if.status[ifAdminStatus.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              description: 'IF-MIB::ifAdminStatus'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.7.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: 04793aef3a1d497d8f6ea719903a48a6
+              name: 'Interface {#IFNAME}({#IFALIAS}): Operational status'
+              type: DEPENDENT
+              key: 'net.if.status[ifOperStatus.{#SNMPINDEX}]'
+              delay: '0'
+              trends: '0'
+              description: 'IF-MIB::ifOperStatus'
+              valuemap:
+                name: 'IF-MIB::ifOperStatus'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: net.if.walk
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+              trigger_prototypes:
+                - uuid: da06626a9dfe4f6ab31bb07378716427
+                  expression: '{$IFCONTROL:"{#IFNAME}"}=1 and last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$IFCONTROL:"{#IFNAME}"}=0'
+                  name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+                  opdata: 'Current state: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  tags:
+                    - tag: interface
+                      value: '{#IFNAME}'
+                    - tag: scope
+                      value: availability
+          graph_prototypes:
+            - uuid: 91f6373a2d444e569e8c9cf8a64003a5
+              name: 'Interface {#IFNAME}({#IFALIAS}): Network traffic'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+          master_item:
+            key: net.if.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#IFOPERSTATUS}'
+                - 1.3.6.1.2.1.2.2.1.8
+                - '0'
+                - '{#IFADMINSTATUS}'
+                - 1.3.6.1.2.1.2.2.1.7
+                - '0'
+                - '{#IFALIAS}'
+                - 1.3.6.1.2.1.31.1.1.1.18
+                - '0'
+                - '{#IFNAME}'
+                - 1.3.6.1.2.1.31.1.1.1.1
+                - '0'
+                - '{#IFDESCR}'
+                - 1.3.6.1.2.1.2.2.1.2
+                - '0'
+                - '{#IFTYPE}'
+                - 1.3.6.1.2.1.2.2.1.3
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: 44238f0417144af29c80f1cb96edb208
+          name: 'Radio discovery'
+          type: DEPENDENT
+          key: unifi.radio.discovery
+          delay: '0'
+          description: 'Discovery of UBNT-UniFi-MIB::unifiRadioTable - WiFi radios.'
+          item_prototypes:
+            - uuid: 8b704f59c87349709946bcbfcb98c5d8
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Other BSS utilization'
+              type: DEPENDENT
+              key: 'unifi.radio.cu_other[{#SNMPINDEX}]'
+              delay: '0'
+              units: '%'
+              description: 'UBNT-UniFi-MIB::unifiRadioOtherBss - Channel utilization by other BSSes (interference)'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.1.1.7.{#SNMPINDEX}'
+                    - '0'
+              master_item:
+                key: unifi.radio.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: radio
+                  value: '{#RADIO_NAME}'
+            - uuid: be55a9902607401abb8236dc5836de3e
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Channel utilization (self RX)'
+              type: DEPENDENT
+              key: 'unifi.radio.cu_self_rx[{#SNMPINDEX}]'
+              delay: '0'
+              units: '%'
+              description: 'UBNT-UniFi-MIB::unifiRadioCuSelfRx'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.1.1.4.{#SNMPINDEX}'
+                    - '0'
+              master_item:
+                key: unifi.radio.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: radio
+                  value: '{#RADIO_NAME}'
+            - uuid: ebb5f6557c444ec881e3b825a29b7e9b
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Channel utilization (self TX)'
+              type: DEPENDENT
+              key: 'unifi.radio.cu_self_tx[{#SNMPINDEX}]'
+              delay: '0'
+              units: '%'
+              description: 'UBNT-UniFi-MIB::unifiRadioCuSelfTx'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.1.1.5.{#SNMPINDEX}'
+                    - '0'
+              master_item:
+                key: unifi.radio.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: radio
+                  value: '{#RADIO_NAME}'
+            - uuid: c10883eff60043a68e54958ae0a1ecc8
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Channel utilization'
+              type: DEPENDENT
+              key: 'unifi.radio.cu_total[{#SNMPINDEX}]'
+              delay: '0'
+              units: '%'
+              description: 'UBNT-UniFi-MIB::unifiRadioCuTotal - Total channel utilization'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.1.1.6.{#SNMPINDEX}'
+                    - '0'
+              master_item:
+                key: unifi.radio.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: radio
+                  value: '{#RADIO_NAME}'
+              trigger_prototypes:
+                - uuid: dc408f7015714e34b24ad8779b0c0c2c
+                  expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/unifi.radio.cu_total[{#SNMPINDEX}],5m)>{$CHANNEL.UTIL.WARN}'
+                  name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): High channel utilization'
+                  event_name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): High channel utilization (>{$CHANNEL.UTIL.WARN}% for 5m)'
+                  opdata: 'Current utilization: {ITEM.LASTVALUE1}'
+                  priority: WARNING
+                  manual_close: 'YES'
+                  tags:
+                    - tag: radio
+                      value: '{#RADIO_NAME}'
+                    - tag: scope
+                      value: performance
+                - uuid: a92a3af07f954fd291991dbdab0e3309
+                  expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/unifi.radio.cu_total[{#SNMPINDEX}],5m)>{$CHANNEL.UTIL.CRIT}'
+                  name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Very high channel utilization'
+                  event_name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Very high channel utilization (>{$CHANNEL.UTIL.CRIT}% for 5m)'
+                  opdata: 'Current utilization: {ITEM.LASTVALUE1}'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+                  dependencies:
+                    - name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): High channel utilization'
+                      expression: 'min(/Ubiquiti Unifi UAP Access Point SNMP/unifi.radio.cu_total[{#SNMPINDEX}],5m)>{$CHANNEL.UTIL.WARN}'
+                  tags:
+                    - tag: radio
+                      value: '{#RADIO_NAME}'
+                    - tag: scope
+                      value: performance
+            - uuid: 9ace8a196df340c8bdb8cd1f0cae12ce
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Number of clients'
+              type: DEPENDENT
+              key: 'unifi.radio.num_sta[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UBNT-UniFi-MIB::unifiRadioNumSta - Number of associated stations'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.1.1.8.{#SNMPINDEX}'
+                    - '0'
+              master_item:
+                key: unifi.radio.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: radio
+                  value: '{#RADIO_NAME}'
+            - uuid: 491fc7849bbf43799aa1e31221e77b87
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): TX power'
+              type: DEPENDENT
+              key: 'unifi.radio.tx_power[{#SNMPINDEX}]'
+              delay: '0'
+              units: dBm
+              description: 'UBNT-UniFi-MIB::unifiRadioTxPower'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.1.1.9.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: unifi.radio.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: radio
+                  value: '{#RADIO_NAME}'
+          graph_prototypes:
+            - uuid: d66f8eafc7a8490193df6134b629c9cb
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Channel utilization'
+              ymin_type_1: FIXED
+              ymax_type_1: FIXED
+              graph_items:
+                - drawtype: BOLD_LINE
+                  color: 1A7C11
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.radio.cu_total[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.radio.cu_self_rx[{#SNMPINDEX}]'
+                - sortorder: '2'
+                  color: F63100
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.radio.cu_self_tx[{#SNMPINDEX}]'
+                - sortorder: '3'
+                  color: FC6EA3
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.radio.cu_other[{#SNMPINDEX}]'
+            - uuid: dc15f7ee376d45fa83b905f4d167969a
+              name: 'Radio {#RADIO_NAME} ({#RADIO_BAND}): Number of clients'
+              graph_items:
+                - drawtype: BOLD_LINE
+                  color: 199C0D
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.radio.num_sta[{#SNMPINDEX}]'
+          master_item:
+            key: unifi.radio.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#RADIO_NAME}'
+                - 1.3.6.1.4.1.41112.1.6.1.1.1.2
+                - '0'
+                - '{#RADIO_BAND}'
+                - 1.3.6.1.4.1.41112.1.6.1.1.1.3
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: 91df343cfe26438592c82b79f2d75c5b
+          name: 'VAP discovery'
+          type: DEPENDENT
+          key: unifi.vap.discovery
+          delay: '0'
+          filter:
+            conditions:
+              - macro: '{#VAP_USAGE}'
+                value: user
+                formulaid: A
+          description: 'Discovery of UBNT-UniFi-MIB::unifiVapTable - Virtual Access Points (SSIDs).'
+          item_prototypes:
+            - uuid: c4a009b4921b48f0b0d21f55868dd8cc
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): Channel'
+              type: DEPENDENT
+              key: 'unifi.vap.channel[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UBNT-UniFi-MIB::unifiVapChannel'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.4.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: 375b508fcefc428d99a0e1e9f15a9bce
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): RX dropped'
+              type: DEPENDENT
+              key: 'unifi.vap.rx.dropped[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UBNT-UniFi-MIB::unifiVapRxDropped'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.20.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: 067e268f8476429484b872f90535599c
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): Bits received'
+              type: DEPENDENT
+              key: 'unifi.vap.rx[{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              description: 'UBNT-UniFi-MIB::unifiVapRxBytes'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.16.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: 2602630c9b8a4d7cada9661be01087c8
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): TX dropped'
+              type: DEPENDENT
+              key: 'unifi.vap.tx.dropped[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UBNT-UniFi-MIB::unifiVapTxDropped'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.11.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: 8b1f7ab0bbe342958d3b2a4e88bb5dab
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): TX retries'
+              type: DEPENDENT
+              key: 'unifi.vap.tx.retries[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UBNT-UniFi-MIB::unifiVapTxRetries (.18) - wireless TX retries/errors'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.18.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: 43dc17ee40484678becf4995d5e5f827
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): Bits sent'
+              type: DEPENDENT
+              key: 'unifi.vap.tx[{#SNMPINDEX}]'
+              delay: '0'
+              units: bps
+              description: 'UBNT-UniFi-MIB::unifiVapTxBytes'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.10.{#SNMPINDEX}'
+                    - '0'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: f8f37b3b6289442eba1d93bc19578ca6
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): TX power'
+              type: DEPENDENT
+              key: 'unifi.vap.tx_power[{#SNMPINDEX}]'
+              delay: '0'
+              units: dBm
+              description: 'UBNT-UniFi-MIB::unifiVapTxPower (.21) - TX power in dBm'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.21.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+            - uuid: 27050a9108b74672a91c0ec4afff4dba
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): Status'
+              type: DEPENDENT
+              key: 'unifi.vap.up[{#SNMPINDEX}]'
+              delay: '0'
+              description: 'UBNT-UniFi-MIB::unifiVapUp (.22) - 1=enabled, 0=disabled'
+              valuemap:
+                name: 'Service state'
+              preprocessing:
+                - type: SNMP_WALK_VALUE
+                  parameters:
+                    - '1.3.6.1.4.1.41112.1.6.1.2.1.22.{#SNMPINDEX}'
+                    - '0'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 3m
+              master_item:
+                key: unifi.vap.walk
+              tags:
+                - tag: component
+                  value: wireless
+                - tag: vap
+                  value: '{#VAP_ESSID}'
+          graph_prototypes:
+            - uuid: c12c02d85be746489a03a6cffdb44b46
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): Network traffic'
+              graph_items:
+                - color: 1A7C11
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.vap.rx[{#SNMPINDEX}]'
+                - sortorder: '1'
+                  color: 2774A4
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.vap.tx[{#SNMPINDEX}]'
+            - uuid: a6aa92b3079a4010b7ee45a1bd270ad0
+              name: 'VAP {#VAP_ESSID} ({#VAP_NAME}): Number of clients'
+              graph_items:
+                - drawtype: BOLD_LINE
+                  color: 199C0D
+                  item:
+                    host: 'Ubiquiti Unifi UAP Access Point SNMP'
+                    key: 'unifi.vap.tx_power[{#SNMPINDEX}]'
+          master_item:
+            key: unifi.vap.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#VAP_ESSID}'
+                - 1.3.6.1.4.1.41112.1.6.1.2.1.6
+                - '0'
+                - '{#VAP_NAME}'
+                - 1.3.6.1.4.1.41112.1.6.1.2.1.7
+                - '0'
+                - '{#VAP_RADIO}'
+                - 1.3.6.1.4.1.41112.1.6.1.2.1.9
+                - '0'
+                - '{#VAP_USAGE}'
+                - 1.3.6.1.4.1.41112.1.6.1.2.1.23
+                - '0'
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+      tags:
+        - tag: class
+          value: network-ap
+        - tag: protocol
+          value: snmp
+        - tag: vendor
+          value: Ubiquiti
+      macros:
+        - macro: '{$CHANNEL.UTIL.CRIT}'
+          value: '90'
+          description: 'Channel utilization critical threshold (%)'
+        - macro: '{$CHANNEL.UTIL.WARN}'
+          value: '80'
+          description: 'Channel utilization warning threshold (%)'
+        - macro: '{$CPU.UTIL.CRIT}'
+          value: '90'
+          description: 'CPU utilization critical threshold (%)'
+        - macro: '{$ICMP_LOSS_WARN}'
+          value: '20'
+          description: 'ICMP packet loss warning threshold (%)'
+        - macro: '{$ICMP_RESPONSE_TIME_WARN}'
+          value: '0.15'
+          description: 'ICMP response time warning threshold (s)'
+        - macro: '{$IF.ERRORS.WARN}'
+          value: '2'
+          description: 'Interface errors per interval warning threshold'
+        - macro: '{$IFCONTROL}'
+          value: '1'
+          description: 'Link down trigger control (1=enabled, 0=disabled)'
+        - macro: '{$MEMORY.UTIL.MAX}'
+          value: '90'
+          description: 'Memory utilization warning threshold (%)'
+        - macro: '{$NET.IF.IFDESCR.MATCHES}'
+          value: '.*'
+          description: 'Regex for interface descriptions to include'
+        - macro: '{$NET.IF.IFDESCR.NOT_MATCHES}'
+          value: DOES_NOT_MATCH
+          description: 'Regex for interface descriptions to exclude'
+        - macro: '{$NET.IF.IFNAME.MATCHES}'
+          value: ^eth
+          description: 'Regex for interface names to include in IF-MIB discovery'
+        - macro: '{$NET.IF.IFNAME.NOT_MATCHES}'
+          value: DOES_NOT_MATCH
+          description: 'Regex for interface names to exclude from IF-MIB discovery'
+        - macro: '{$SNMP.TIMEOUT}'
+          value: 5m
+          description: 'SNMP unavailability timeout'
+      valuemaps:
+        - uuid: f969e91f1fa9410190683c70ac56c0f4
+          name: 'IF-MIB::ifOperStatus'
+          mappings:
+            - value: '1'
+              newvalue: up
+            - value: '2'
+              newvalue: down
+            - value: '3'
+              newvalue: testing
+            - value: '4'
+              newvalue: unknown
+            - value: '5'
+              newvalue: dormant
+            - value: '6'
+              newvalue: notPresent
+            - value: '7'
+              newvalue: lowerLayerDown
+        - uuid: 1ef0e19a2d8a4035bc4275b8d15a39f9
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+        - uuid: ecd73ced1b614f608c7e6fa0bb5895a8
+          name: zabbix.host.available
+          mappings:
+            - value: '0'
+              newvalue: 'not available'
+            - value: '1'
+              newvalue: available
+            - value: '2'
+              newvalue: unknown
+  triggers:
+    - uuid: 4ec3050c0f1f4ea7a29f5fa2915a42fb
+      expression: 'last(/Ubiquiti Unifi UAP Access Point SNMP/system.hw.uptime[unifiApSystemUptime.0])>0 and last(/Ubiquiti Unifi UAP Access Point SNMP/system.hw.uptime[unifiApSystemUptime.0])<600 or last(/Ubiquiti Unifi UAP Access Point SNMP/system.hw.uptime[unifiApSystemUptime.0])=0 and last(/Ubiquiti Unifi UAP Access Point SNMP/system.net.uptime[sysUpTime.0])>0 and last(/Ubiquiti Unifi UAP Access Point SNMP/system.net.uptime[sysUpTime.0])<600'
+      name: 'Unifi AP: Device has been restarted'
+      event_name: 'Unifi AP: Device has been restarted (uptime < 10m)'
+      opdata: 'Uptime: {ITEM.LASTVALUE1}'
+      priority: WARNING
+      manual_close: 'YES'
+      tags:
+        - tag: scope
+          value: notice
+  graphs:
+    - uuid: 4c00dc7478904f29a075339b8ef772bc
+      name: 'CPU utilization'
+      ymin_type_1: FIXED
+      ymax_type_1: FIXED
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 1A7C11
+          item:
+            host: 'Ubiquiti Unifi UAP Access Point SNMP'
+            key: system.cpu.util.1min
+        - sortorder: '1'
+          drawtype: BOLD_LINE
+          color: 2774A4
+          item:
+            host: 'Ubiquiti Unifi UAP Access Point SNMP'
+            key: system.cpu.util
+        - sortorder: '2'
+          drawtype: BOLD_LINE
+          color: F63100
+          item:
+            host: 'Ubiquiti Unifi UAP Access Point SNMP'
+            key: system.cpu.util.15min
+    - uuid: b62a51a6c93b4429b06b6c9ee72ab331
+      name: 'Memory utilization'
+      ymin_type_1: FIXED
+      ymax_type_1: FIXED
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 199C0D
+          item:
+            host: 'Ubiquiti Unifi UAP Access Point SNMP'
+            key: vm.memory.util

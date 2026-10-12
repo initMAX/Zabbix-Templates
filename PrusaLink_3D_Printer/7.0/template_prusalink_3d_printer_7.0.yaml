@@ -1,0 +1,1845 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: a014d86eca21478c852f7b78737e6571
+      template: 'PrusaLink 3D Printer'
+      name: 'PrusaLink 3D Printer'
+      description: |
+        Monitoring Prusa 3D printers via PrusaLink API.
+        
+        More of our templates can be found on
+        https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: 'initMAX s.r.o.'
+        version: 7.0-0
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: df65a29c42a84775babdc493cfb46dd3
+          name: 'Active camera'
+          type: DEPENDENT
+          key: info.active_camera
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.active_camera
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: ac17a60141544ac88fc9b00b0b33af3a
+          name: 'Farm mode'
+          type: DEPENDENT
+          key: info.farm_mode
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.farm_mode
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: 11d49e4a549049b29a2ea8908615591c
+          name: Hostname
+          type: DEPENDENT
+          key: info.hostname
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.hostname
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: 939170f33590470cadb8f10bae3ec10c
+          name: Location
+          type: DEPENDENT
+          key: info.location
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.location
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: 4508ae8020a64ac0a0af13dbd9c01ac5
+          name: 'Min extrusion temp'
+          type: DEPENDENT
+          key: info.min_extrusion_temp
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.min_extrusion_temp
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: eae0996cb0b94b73b7e5a2bdabafe2aa
+          name: MMU
+          type: DEPENDENT
+          key: info.mmu
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.mmu
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: d3af1155effc4518822a69e9d6143749
+          name: 'Device name'
+          type: DEPENDENT
+          key: info.name
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return data.name || data.hostname || '';
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: 5f914f8fd2934c12ba49cdd90e7365c6
+          name: 'Network error chime'
+          type: DEPENDENT
+          key: info.network_error_chime
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.network_error_chime
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: bdd2a76bdd9646b4bc8d7a03ba6874b2
+          name: 'Nozzle diameter'
+          type: DEPENDENT
+          key: info.nozzle_diameter
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.nozzle_diameter
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: e6e1bb8258794ffcbc0d8644e1ecf29d
+          name: Port
+          type: DEPENDENT
+          key: info.port
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.port
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: 6de9b4a0cabd4d098b53cce4e0706712
+          name: 'SD ready'
+          type: DEPENDENT
+          key: info.sd_ready
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.sd_ready
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: 0f826943076a4a8e82caa6f5efa614bc
+          name: 'Serial number'
+          type: DEPENDENT
+          key: info.serial
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.serial
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.info
+          tags:
+            - tag: component
+              value: info
+        - uuid: db0852085d7148ca98e4c868ab6fb799
+          name: 'Info RAW'
+          type: HTTP_AGENT
+          key: prusa.info
+          delay: 10m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          authtype: DIGEST
+          username: '{$PRUSA.USERNAME}'
+          password: '{$PRUSA.PASSWORD}'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          timeout: 10s
+          url: '{$PRUSA.HTTP.SCHEMA}://{$PRUSA.IP}/api/v1/info'
+          status_codes: 200-299
+          tags:
+            - tag: component
+              value: info
+        - uuid: e3c961d6b48546e695464cb5a5369261
+          name: 'Job RAW'
+          type: HTTP_AGENT
+          key: prusa.job
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          authtype: DIGEST
+          username: '{$PRUSA.USERNAME}'
+          password: '{$PRUSA.PASSWORD}'
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+          timeout: 10s
+          url: '{$PRUSA.HTTP.SCHEMA}://{$PRUSA.IP}/api/v1/job'
+          status_codes: 200-299
+          tags:
+            - tag: component
+              value: job
+        - uuid: 8fd69e07190b400a8239bff10c8ef691
+          name: 'Job display name'
+          type: DEPENDENT
+          key: prusa.job.display_name
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.file.display_name
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED
+              parameters:
+                - ''
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 9f566fe58765472889b9a440df6ef6d6
+          name: 'Job file display path'
+          type: DEPENDENT
+          key: prusa.job.file.display_path
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.file.display_path
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 031b71a36de049558a35464bf11ed66b
+          name: 'Job file metadata'
+          type: DEPENDENT
+          key: prusa.job.file.meta
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return JSON.stringify(data.file && data.file.meta ? data.file.meta : {});
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: ddfb36142c0b4ea8aa74fcb003ea4dd0
+          name: 'Job file path'
+          type: DEPENDENT
+          key: prusa.job.file.path
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.file.path
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 89f401beac29408d8beec18227b1fad3
+          name: 'Job file refs'
+          type: DEPENDENT
+          key: prusa.job.file.refs
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return JSON.stringify(data.file && data.file.refs ? data.file.refs : {});
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 784fe2052582431daf7c2e039abfb24a
+          name: 'Job file size'
+          type: DEPENDENT
+          key: prusa.job.file.size
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.file.size
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: b936a376940241119d501fbf5f3b6378
+          name: 'Job ID'
+          type: DEPENDENT
+          key: prusa.job.id
+          delay: '0'
+          history: 7d
+          units: '!'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.id
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 4e9d57929f7d410fbc863103622b76ba
+          name: 'Job inaccurate estimates'
+          type: DEPENDENT
+          key: prusa.job.inaccurate_estimates
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.inaccurate_estimates
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: e01d98a213174142ac981d52484633ad
+          name: 'Job modified timestamp'
+          type: DEPENDENT
+          key: prusa.job.m_timestamp
+          delay: '0'
+          history: 7d
+          units: unixtime
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.file.m_timestamp
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 5cefc697ee12450686a436b5408e48f1
+          name: 'Job file name'
+          type: DEPENDENT
+          key: prusa.job.name
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.file.name
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED
+              parameters:
+                - ''
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 2cfc75c9ad434ebeb384dc45ff8665d5
+          name: 'Job progress'
+          type: DEPENDENT
+          key: prusa.job.progress
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.progress
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: ff0e576f6a6641848f966ad52229c4a3
+          name: 'Job serial print'
+          type: DEPENDENT
+          key: prusa.job.serial_print
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.serial_print
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 424295f47af94e6196a9a859971176f7
+          name: 'Job state'
+          type: DEPENDENT
+          key: prusa.job.state
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.state
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: d5821ac33468434e850ad97e4ca8432c
+          name: 'Job time printing'
+          type: DEPENDENT
+          key: prusa.job.time_printing
+          delay: '0'
+          history: 7d
+          units: s
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.time_printing
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 87988fa940ff4235bb686fa06d034eb0
+          name: 'Job time remaining'
+          type: DEPENDENT
+          key: prusa.job.time_remaining
+          delay: '0'
+          history: 7d
+          units: s
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.time_remaining
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.job
+          tags:
+            - tag: component
+              value: job
+        - uuid: 22917dd0435d4a0da2f7cf9e22294da4
+          name: 'Status RAW'
+          type: HTTP_AGENT
+          key: prusa.status
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          authtype: DIGEST
+          username: '{$PRUSA.USERNAME}'
+          password: '{$PRUSA.PASSWORD}'
+          timeout: 10s
+          url: '{$PRUSA.HTTP.SCHEMA}://{$PRUSA.IP}/api/v1/status'
+          status_codes: 200-299
+          tags:
+            - tag: component
+              value: status
+        - uuid: 0a51e7bdd3134943a125aa055fc04e38
+          name: 'Version RAW'
+          type: HTTP_AGENT
+          key: prusa.version
+          delay: 10m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          authtype: DIGEST
+          username: '{$PRUSA.USERNAME}'
+          password: '{$PRUSA.PASSWORD}'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          timeout: 10s
+          url: '{$PRUSA.HTTP.SCHEMA}://{$PRUSA.IP}/api/version'
+          status_codes: 200-299
+          tags:
+            - tag: component
+              value: version
+        - uuid: 8e7939492b2f4cc2bbc693bad6c531c4
+          name: 'Axis X'
+          type: DEPENDENT
+          key: status.axis_x
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.axis_x
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: 48ce1d46ffc24d168fb833c7820fa80d
+          name: 'Axis Y'
+          type: DEPENDENT
+          key: status.axis_y
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.axis_y
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: 1765b7f2e81a48ee8681a579618f049a
+          name: 'Axis Z'
+          type: DEPENDENT
+          key: status.axis_z
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.axis_z
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: be58dd2415cd46b190eeea0195311574
+          name: 'Camera ID'
+          type: DEPENDENT
+          key: status.camera.id
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.camera.id
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: camera
+        - uuid: 18d70a7199024854a050e2f9b0b8bacd
+          name: 'Hotend fan'
+          type: DEPENDENT
+          key: status.fan_hotend
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.fan_hotend
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: 22e1324814634a9bb466a9a8c9d7a369
+          name: 'Print fan'
+          type: DEPENDENT
+          key: status.fan_print
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.fan_print
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: e9b3aeb6518d4a12a4f8377885780244
+          name: Flow
+          type: DEPENDENT
+          key: status.flow
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.flow
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: baa1022fa1ed4622bc2be13aa89a24a7
+          name: Speed
+          type: DEPENDENT
+          key: status.speed
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.speed
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: fa47aa288d86419a8ae42bbab4c901e5
+          name: 'Printer state'
+          type: DEPENDENT
+          key: status.state
+          delay: '0'
+          history: 7d
+          valuemap:
+            name: StatusPrinter.state
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.state
+              error_handler: DISCARD_VALUE
+            - type: STR_REPLACE
+              parameters:
+                - IDLE
+                - '1'
+            - type: STR_REPLACE
+              parameters:
+                - BUSY
+                - '2'
+            - type: STR_REPLACE
+              parameters:
+                - PRINTING
+                - '3'
+            - type: STR_REPLACE
+              parameters:
+                - PAUSED
+                - '4'
+            - type: STR_REPLACE
+              parameters:
+                - FINISHED
+                - '5'
+            - type: STR_REPLACE
+              parameters:
+                - STOPPED
+                - '6'
+            - type: STR_REPLACE
+              parameters:
+                - ERROR
+                - '7'
+            - type: STR_REPLACE
+              parameters:
+                - ATTENTION
+                - '8'
+            - type: STR_REPLACE
+              parameters:
+                - READY
+                - '9'
+            - type: IN_RANGE
+              parameters:
+                - '1'
+                - '9'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '7'
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+          triggers:
+            - uuid: 599e69b785cd447bbeae517726ed1709
+              expression: 'last(/PrusaLink 3D Printer/status.state)=8'
+              name: 'PrusaLink: Printer state is ATTENTION'
+              priority: WARNING
+              tags:
+                - tag: component
+                  value: state
+            - uuid: 67c578dc4c3f43258f77536bd907f09d
+              expression: 'last(/PrusaLink 3D Printer/status.state)=7'
+              name: 'PrusaLink: Printer state is ERROR'
+              priority: HIGH
+              tags:
+                - tag: component
+                  value: state
+        - uuid: aabc4cafde7e41ceafcdc07098c29f8d
+          name: 'Connection status message'
+          type: DEPENDENT
+          key: status.status_connect.message
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.status_connect.message
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: 3cfa3264fe63478e8c6cd2706ef89a7b
+          name: 'Connection status OK'
+          type: DEPENDENT
+          key: status.status_connect.ok
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.status_connect.ok
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: 921ec310271548608b0cd63390d8cf98
+          name: 'Printer status message'
+          type: DEPENDENT
+          key: status.status_printer.message
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.status_printer.message
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: 4ab6cf9705034606a4987437309f169a
+          name: 'Printer status OK'
+          type: DEPENDENT
+          key: status.status_printer.ok
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.status_printer.ok
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: f491d20784b54ac4818ddb66a88084cc
+          name: 'Storage free space'
+          type: DEPENDENT
+          key: status.storage.free_space
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.storage.free_space
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: storage
+        - uuid: d81ab6d9def448f8bc01162192d100ab
+          name: 'Storage name'
+          type: DEPENDENT
+          key: status.storage.name
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.storage.name
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 0362f4946802400abeffb9af8abfa6c0
+          name: 'Storage path'
+          type: DEPENDENT
+          key: status.storage.path
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.storage.path
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: storage
+        - uuid: cf23374e0b1d444f89ac233102f2478f
+          name: 'Storage read only'
+          type: DEPENDENT
+          key: status.storage.read_only
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.storage.read_only
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 4d35a7c1f37b45f49ebd9d6b31569120
+          name: 'Bed target temperature'
+          type: DEPENDENT
+          key: status.target_bed
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: °C
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.target_bed
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: ebd653d051294b8ba5982ea7500b5468
+          name: 'Nozzle target temperature'
+          type: DEPENDENT
+          key: status.target_nozzle
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: °C
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.target_nozzle
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+        - uuid: fa9ea2007bb14a5d9dbf14b60572eaf3
+          name: 'Bed temperature'
+          type: DEPENDENT
+          key: status.temp_bed
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: °C
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.temp_bed
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+          triggers:
+            - uuid: 758601effbd6431f8d1c7659bf8f3f3d
+              expression: 'last(/PrusaLink 3D Printer/status.temp_bed)>{$PRUSA.BED.TEMP.WARN}'
+              name: 'PrusaLink: Bed temperature is high'
+              priority: WARNING
+              dependencies:
+                - name: 'PrusaLink: Bed temperature is too high'
+                  expression: 'last(/PrusaLink 3D Printer/status.temp_bed)>{$PRUSA.BED.TEMP.HIGH}'
+              tags:
+                - tag: component
+                  value: temperature
+            - uuid: 33ff5a6e02cd4256b6054f4be4da01b9
+              expression: 'last(/PrusaLink 3D Printer/status.temp_bed)>{$PRUSA.BED.TEMP.HIGH}'
+              name: 'PrusaLink: Bed temperature is too high'
+              priority: HIGH
+              tags:
+                - tag: component
+                  value: temperature
+        - uuid: 3ad9ac9ef42042a299059950e9d8496b
+          name: 'Nozzle temperature'
+          type: DEPENDENT
+          key: status.temp_nozzle
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: °C
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.printer.temp_nozzle
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: status
+          triggers:
+            - uuid: eef8e5c6f6f946f9b28f6c28b2986ab7
+              expression: 'last(/PrusaLink 3D Printer/status.temp_nozzle)>{$PRUSA.NOZZLE.TEMP.WARN}'
+              name: 'PrusaLink: Nozzle temperature is high'
+              priority: WARNING
+              dependencies:
+                - name: 'PrusaLink: Nozzle temperature is too high'
+                  expression: 'last(/PrusaLink 3D Printer/status.temp_nozzle)>{$PRUSA.NOZZLE.TEMP.HIGH}'
+              tags:
+                - tag: component
+                  value: temperature
+            - uuid: 7bd2f5913275457da8e3f6eb9357a556
+              expression: 'last(/PrusaLink 3D Printer/status.temp_nozzle)>{$PRUSA.NOZZLE.TEMP.HIGH}'
+              name: 'PrusaLink: Nozzle temperature is too high'
+              priority: HIGH
+              tags:
+                - tag: component
+                  value: temperature
+        - uuid: d1b033cebe334d5681b512c8671b7931
+          name: 'Transfer data'
+          type: DEPENDENT
+          key: status.transfer.data_transferred
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: B
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.transfer.data_transferred
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: transfer
+        - uuid: 41e85f4344a543199f76a0ad2d907721
+          name: 'Transfer ID'
+          type: DEPENDENT
+          key: status.transfer.id
+          delay: '0'
+          history: 7d
+          units: '!'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.transfer.id
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: transfer
+        - uuid: abf65ee6445e47858299de972551c966
+          name: 'Transfer progress'
+          type: DEPENDENT
+          key: status.transfer.progress
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.transfer.progress
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: transfer
+        - uuid: cfc2809421cb41b6ba6043d11367358c
+          name: 'Transfer time'
+          type: DEPENDENT
+          key: status.transfer.time_transferring
+          delay: '0'
+          history: 7d
+          units: s
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.transfer.time_transferring
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.status
+          tags:
+            - tag: component
+              value: transfer
+        - uuid: 6e0823751cf34bba837e4b28614115f4
+          name: 'API version'
+          type: DEPENDENT
+          key: version.api
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.api
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: 43fbeec3574947f0aaf8514046858647
+          name: Capabilities
+          type: DEPENDENT
+          key: version.capabilities.raw
+          delay: '0'
+          history: 7d
+          value_type: TEXT
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return JSON.stringify(data.capabilities || {});
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: 33006ce08dd34c06ab77d2e9b8d9aced
+          name: 'Upload by PUT supported'
+          type: DEPENDENT
+          key: version.capabilities.upload_by_put
+          delay: '0'
+          history: 7d
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return 0; }
+                  var caps = data.capabilities || {};
+                  return caps['upload-by-put'] ? 1 : 0;
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: bc2a379b7bef4eda82266ebb74557f5c
+          name: 'Firmware version'
+          type: DEPENDENT
+          key: version.firmware
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return data.firmware || '';
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: a9c811c6c7f64ee6bce766caa4389792
+          name: 'Printer firmware version'
+          type: DEPENDENT
+          key: version.printer
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return data.printer || '';
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: fb19345e837c4ef28ec0a34c727ca324
+          name: 'SDK version'
+          type: DEPENDENT
+          key: version.sdk
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return data.sdk || '';
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: 7bccce3d976c48b796acd8937904ae18
+          name: 'Server version'
+          type: DEPENDENT
+          key: version.server
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data;
+                  try { data = JSON.parse(value); } catch (e) { return ''; }
+                  return data.server || data.version || '';
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+        - uuid: 518249bc8c1c405ca1cb5d71e6603474
+          name: 'Product text'
+          type: DEPENDENT
+          key: version.text
+          delay: '0'
+          history: 7d
+          value_type: CHAR
+          trends: '0'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.text
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: prusa.version
+          tags:
+            - tag: component
+              value: version
+      macros:
+        - macro: '{$PRUSA.BED.TEMP.HIGH}'
+          value: '110'
+          description: 'Bed temperature high threshold (C). Example: 110'
+        - macro: '{$PRUSA.BED.TEMP.WARN}'
+          value: '100'
+          description: 'Bed temperature warning threshold (C). Example: 100'
+        - macro: '{$PRUSA.HTTP.SCHEMA}'
+          value: http
+          description: 'HTTP schema (http/https). Example: http'
+        - macro: '{$PRUSA.IP}'
+          description: 'PrusaLink IP address (required). Example: 192.168.1.50'
+        - macro: '{$PRUSA.NOZZLE.TEMP.HIGH}'
+          value: '280'
+          description: 'Nozzle temperature high threshold (C). Example: 280'
+        - macro: '{$PRUSA.NOZZLE.TEMP.WARN}'
+          value: '260'
+          description: 'Nozzle temperature warning threshold (C). Example: 260'
+        - macro: '{$PRUSA.PASSWORD}'
+          description: 'PrusaLink password (required)'
+        - macro: '{$PRUSA.USERNAME}'
+          value: maker
+          description: 'PrusaLink username (required). Example: maker'
+      dashboards:
+        - uuid: 41bca3325014452b9115c565a462ca26
+          name: Status
+          pages:
+            - widgets:
+                - type: item
+                  name: Hostname
+                  width: '18'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Hostname:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: info.hostname
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: svggraph
+                  name: Nozzle
+                  'y': '2'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Nozzle temperature'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '1'
+                    - type: INTEGER
+                      name: ds.0.width
+                      value: '2'
+                    - type: STRING
+                      name: ds.1.color
+                      value: FFD54F
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: status.target_nozzle
+                    - type: STRING
+                      name: ds.1.items.1
+                      value: 'Nozzle target temperature'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '0'
+                    - type: INTEGER
+                      name: ds.1.width
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: FCCSG
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: item
+                  name: JOB
+                  'y': '7'
+                  width: '16'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Job progress:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: prusa.job.progress
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: gauge
+                  name: JOB
+                  'y': '9'
+                  width: '16'
+                  height: '4'
+                  fields:
+                    - type: INTEGER
+                      name: angle
+                      value: '270'
+                    - type: STRING
+                      name: description
+                      value: 'JOB {ITEM.NAME}'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: prusa.job.progress
+                    - type: STRING
+                      name: max
+                      value: '100'
+                    - type: STRING
+                      name: min
+                      value: '0'
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '3'
+                    - type: INTEGER
+                      name: show.3
+                      value: '5'
+                - type: itemhistory
+                  'y': '13'
+                  width: '43'
+                  height: '3'
+                  fields:
+                    - type: INTEGER
+                      name: columns.0.display
+                      value: '4'
+                    - type: ITEM
+                      name: columns.0.itemid
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: prusa.job.display_name
+                    - type: STRING
+                      name: columns.0.name
+                      value: 'JOB: display_name'
+                    - type: STRING
+                      name: reference
+                      value: NAUFS
+                - type: item
+                  name: JOB
+                  x: '16'
+                  'y': '7'
+                  width: '27'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Job started:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: prusa.job.m_timestamp
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: item
+                  name: JOB
+                  x: '16'
+                  'y': '9'
+                  width: '27'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Job printing:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: prusa.job.time_printing
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: item
+                  name: JOB
+                  x: '16'
+                  'y': '11'
+                  width: '27'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Job remaining:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: prusa.job.time_remaining
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: item
+                  name: Status
+                  x: '18'
+                  width: '17'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Status:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: status.state
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: item
+                  name: Status
+                  x: '35'
+                  width: '24'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'Serial:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: info.serial
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+                - type: svggraph
+                  name: Bed
+                  x: '36'
+                  'y': '2'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '1'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Bed temperature'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '1'
+                    - type: INTEGER
+                      name: ds.0.width
+                      value: '2'
+                    - type: STRING
+                      name: ds.1.color
+                      value: FFD54F
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Bed target temperature'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '0'
+                    - type: INTEGER
+                      name: ds.1.width
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: CPIYV
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: svggraph
+                  x: '43'
+                  'y': '7'
+                  width: '29'
+                  height: '6'
+                  fields:
+                    - type: STRING
+                      name: ds.0.color
+                      value: FF465C
+                    - type: INTEGER
+                      name: ds.0.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.0.items.0
+                      value: 'Job time printing'
+                    - type: INTEGER
+                      name: ds.0.transparency
+                      value: '1'
+                    - type: INTEGER
+                      name: ds.0.width
+                      value: '2'
+                    - type: STRING
+                      name: ds.1.color
+                      value: FFD54F
+                    - type: INTEGER
+                      name: ds.1.fill
+                      value: '0'
+                    - type: STRING
+                      name: ds.1.items.0
+                      value: 'Job time remaining'
+                    - type: INTEGER
+                      name: ds.1.transparency
+                      value: '1'
+                    - type: INTEGER
+                      name: ds.1.width
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_lines
+                      value: '2'
+                    - type: INTEGER
+                      name: legend_statistic
+                      value: '1'
+                    - type: STRING
+                      name: reference
+                      value: EQUDP
+                    - type: INTEGER
+                      name: righty
+                      value: '0'
+                - type: item
+                  name: Status
+                  x: '59'
+                  width: '13'
+                  fields:
+                    - type: INTEGER
+                      name: decimal_places
+                      value: '0'
+                    - type: STRING
+                      name: description
+                      value: 'MMU:'
+                    - type: INTEGER
+                      name: desc_h_pos
+                      value: '0'
+                    - type: INTEGER
+                      name: desc_size
+                      value: '45'
+                    - type: INTEGER
+                      name: desc_v_pos
+                      value: '1'
+                    - type: ITEM
+                      name: itemid.0
+                      value:
+                        host: 'PrusaLink 3D Printer'
+                        key: info.mmu
+                    - type: INTEGER
+                      name: show.0
+                      value: '1'
+                    - type: INTEGER
+                      name: show.1
+                      value: '2'
+                    - type: INTEGER
+                      name: show.2
+                      value: '4'
+                    - type: INTEGER
+                      name: value_h_pos
+                      value: '2'
+      valuemaps:
+        - uuid: 9bcbc317362a4476bdb80e277b937a14
+          name: 'Printing State'
+          mappings:
+            - value: '1'
+              newvalue: PRINTING
+            - value: '2'
+              newvalue: PAUSED
+            - value: '3'
+              newvalue: FINISHED
+            - value: '4'
+              newvalue: STOPPED
+            - value: '5'
+              newvalue: ERROR
+        - uuid: 2957e4f6582d4d5fafcceece1b866a38
+          name: StatusPrinter.state
+          mappings:
+            - value: '1'
+              newvalue: IDLE
+            - value: '2'
+              newvalue: BUSY
+            - value: '3'
+              newvalue: PRINTING
+            - value: '4'
+              newvalue: PAUSED
+            - value: '5'
+              newvalue: FINISHED
+            - value: '6'
+              newvalue: STOPPED
+            - value: '7'
+              newvalue: ERROR
+            - value: '8'
+              newvalue: ATTENTION
+            - value: '9'
+              newvalue: READY

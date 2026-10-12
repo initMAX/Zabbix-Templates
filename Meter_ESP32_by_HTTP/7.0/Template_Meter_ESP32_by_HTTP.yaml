@@ -1,0 +1,80 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 612cd71d525444e8a35d3ec35f6272ee
+      name: Templates/initMAX
+  templates:
+    - uuid: 7db799f94fb2426f9874f0b1f432dac9
+      template: 'Meter ESP32 by HTTP'
+      name: 'Meter ESP32 by HTTP'
+      description: |
+        More of our templates can be found on https://git.initmax.cz/initMAX-Public/zabbix-templates
+        
+        Developed by initMAX s.r.o.
+        https://www.initmax.com
+      vendor:
+        name: initMAX s.r.o.
+        version: 7.0-1
+      groups:
+        - name: Templates/initMAX
+      items:
+        - uuid: 79655fd39ebe468c9411090d18134756
+          name: 'Meter HTTP RAW'
+          type: HTTP_AGENT
+          key: meter
+          delay: 2m
+          value_type: TEXT
+          url: 'http:/{$ESP32.IP}/json'
+          status_codes: ''
+          tags:
+            - tag: RAW
+        - uuid: 06fe14015c1f46cd8b999a1d0742bdd7
+          name: 'Meter HTTP - daily consumption'
+          type: CALCULATED
+          key: meter.daily
+          delay: 0;h0
+          value_type: FLOAT
+          units: m3
+          params: 'last(//meter.status,#1) - last(//meter.status,#1:now-1d)'
+          tags:
+            - tag: Daily
+        - uuid: 7dd847b926ee42859f1172bf41469d19
+          name: 'Meter HTTP Status'
+          type: DEPENDENT
+          key: meter.status
+          value_type: FLOAT
+          units: m3
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  data = JSON.parse(value);
+                  if ( data.main.error == "no error" ) return value;
+                  else return data.main.error;
+            - type: JSONPATH
+              parameters:
+                - $.main.raw
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: meter
+          tags:
+            - tag: Status
+          triggers:
+            - uuid: 0471e2f0cbf046a9a5ba9fd472ff384d
+              expression: 'monoinc(/Meter ESP32 by HTTP/meter.status,#25,"strict")=1'
+              name: 'Continuous consumption detected !!'
+              priority: HIGH
+        - uuid: 8e573af983664f97b8ef387574d22bf1
+          name: 'Meter HTTP stream m3 / s'
+          type: DEPENDENT
+          key: meter.stream
+          value_type: FLOAT
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+          master_item:
+            key: meter.status
+          tags:
+            - tag: Stream
+      macros:
+        - macro: '{$ESP32.IP}'
+          description: 'ESP32 device IP address'
